@@ -148,8 +148,8 @@ app.get("/api/accounts", async (req, res) => {
   }
 });
 
-// ─── /api/summary ─────────────────────────────────────────────────────────────
-app.get("/api/summary", async (req, res) => {
+// ─── /api/summary + /api/report ────────────────────────────────────────────────
+async function summaryHandler(req, res) {
   try {
     const { startDate, endDate, prevStartDate, prevEndDate, div } = req.query;
     if (!startDate || !endDate || !prevStartDate || !prevEndDate)
@@ -224,8 +224,9 @@ app.get("/api/summary", async (req, res) => {
     console.error("Summary error:", err.message);
     res.status(500).json({ error: err.message });
   }
-});
-
+}
+app.get("/api/summary", summaryHandler);
+app.get("/api/report",  summaryHandler);
 // ─── /api/campaigns ───────────────────────────────────────────────────────────
 app.get("/api/campaigns", async (req, res) => {
   try {
@@ -762,6 +763,35 @@ app.get("/api/insights", async (req, res) => {
     res.json({ insights: allData, generatedAt: new Date().toISOString() });
   } catch(err) {
     console.error("Insights error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── /api/ai-report — proxies prompt to Anthropic API ────────────────────────
+app.post("/api/ai-report", async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    if (!prompt) return res.status(400).json({ error: "Missing prompt" });
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY || "",
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 4000,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || "Anthropic API error");
+    res.json({ text: data.content?.[0]?.text || "" });
+  } catch (err) {
+    console.error("AI report error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
