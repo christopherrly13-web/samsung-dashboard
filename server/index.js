@@ -16,6 +16,7 @@ try {
 const app = express();
 app.use(cors());
 app.use(express.json());
+console.log("CHECKPOINT 1: express static OK");
 app.use(express.static(path.join(__dirname, "../public")));
 
 // ─── Google Ads Client ────────────────────────────────────────────────────────
@@ -32,6 +33,7 @@ try {
   // Don't crash — let the server start so /health works
 }
 
+console.log("CHECKPOINT 2: Google Ads client block done");
 // Division → account ID map (supports comma-separated multiple IDs)
 const DIVISIONS = {
   MX:  process.env.ACCOUNT_ID_MX,
@@ -116,6 +118,7 @@ function buildTasks(divFilter) {
   return tasks;
 }
 
+console.log("CHECKPOINT 3: registering routes");
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get("/health", (req, res) => res.json({ status: "ok", ts: new Date().toISOString() }));
 
@@ -778,5 +781,6 @@ process.on("unhandledRejection", (reason) => {
   console.error("Unhandled promise rejection:", reason);
 });
 
+console.log("CHECKPOINT 4: all routes registered");
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Samsung Ads Dashboard running on port ${PORT}`));
