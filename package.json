@@ -1,0 +1,20 @@
+{
+  "name": "samsung-search-dashboard",
+  "version": "1.0.0",
+  "description": "Samsung Google Ads Search Bi-weekly Dashboard",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "nodemon server/index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dayjs": "^1.11.11",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "google-ads-api": "^23.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}

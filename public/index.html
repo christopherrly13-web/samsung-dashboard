@@ -1,0 +1,1856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Samsung Search Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --blue:#1428A0;--blue-light:#e8eaf6;--cyan:#00B9E4;--red:#E53935;
+    --orange:#FF7B00;--green:#43A047;--purple:#9C27B0;
+    --gray:#f5f6fa;--border:#e0e3ef;--text:#1a1a2e;--muted:#6b7280;
+    --bg:#f0f2f8;--card:#ffffff;--up:#2e7d32;--down:#c62828;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+  .sidebar{position:fixed;top:0;left:0;width:220px;height:100vh;background:var(--blue);color:#fff;display:flex;flex-direction:column;z-index:100}
+  .sidebar-logo{padding:20px 20px 14px;border-bottom:1px solid rgba(255,255,255,.15)}
+  .sidebar-logo .brand{font-size:13px;font-weight:600;letter-spacing:.5px;opacity:.9}
+  .sidebar-logo .sub{font-size:11px;opacity:.55;margin-top:2px}
+  .nav{padding:12px 0;flex:1}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:9px 20px;font-size:13px;cursor:pointer;opacity:.7;transition:all .15s;border-left:3px solid transparent}
+  .nav-item:hover{opacity:1;background:rgba(255,255,255,.08)}
+  .nav-item.active{opacity:1;background:rgba(255,255,255,.12);border-left-color:#fff}
+  .nav-item svg{flex-shrink:0}
+  .sidebar-bottom{padding:14px 20px;border-top:1px solid rgba(255,255,255,.15);font-size:11px;opacity:.5}
+  .main{margin-left:220px;min-height:100vh}
+  .topbar{background:var(--card);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:50}
+  .topbar-title{font-size:15px;font-weight:600;color:var(--blue)}
+  .topbar-controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .date-group{display:flex;align-items:center;gap:6px;background:var(--gray);border-radius:8px;padding:6px 12px}
+  .date-group label{font-size:11px;color:var(--muted);white-space:nowrap}
+  .date-group input[type=date]{border:none;background:transparent;font-size:12px;color:var(--text);cursor:pointer;outline:none}
+  .btn{padding:7px 16px;border-radius:7px;border:none;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
+  .btn-primary{background:var(--blue);color:#fff}
+  .btn-primary:hover{background:#0f1f8a}
+  .btn-primary:disabled{opacity:.5;cursor:not-allowed}
+  .btn-outline{background:transparent;border:1px solid var(--border);color:var(--muted)}
+  .btn-outline:hover{border-color:var(--blue);color:var(--blue)}
+  select{border:1px solid var(--border);border-radius:7px;padding:6px 10px;font-size:12px;background:var(--card);color:var(--text);cursor:pointer;outline:none}
+  select:focus{border-color:var(--blue)}
+  .content{padding:20px 24px}
+  .status-bar{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:8px;font-size:12px;margin-bottom:16px}
+  .status-bar.loading{background:#e8f4fd;color:#1565c0}
+  .status-bar.error{background:#fdecea;color:#c62828}
+  .status-bar.success{background:#e8f5e9;color:#2e7d32}
+  .status-bar.hidden{display:none}
+  .spinner{width:14px;height:14px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:18px}
+  .kpi-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;position:relative;overflow:hidden}
+  .kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--blue)}
+  .kpi-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+  .kpi-val{font-size:22px;font-weight:700;color:var(--text);line-height:1}
+  .kpi-delta{font-size:11px;margin-top:5px;display:flex;align-items:center;gap:3px;font-weight:500}
+  .kpi-prev{font-size:11px;color:var(--muted);margin-top:2px}
+  .up{color:var(--up)}.down{color:var(--down)}.flat{color:var(--muted)}
+  .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
+  .chart-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px}
+  .chart-card.full{grid-column:1/-1}
+  .card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+  .card-title{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .chart-wrap{position:relative}
+  .seg{display:flex;gap:4px}
+  .seg-btn{font-size:11px;padding:4px 10px;border:1px solid var(--border);border-radius:5px;background:transparent;color:var(--muted);cursor:pointer;font-weight:500}
+  .seg-btn.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px}
+  .leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+  .leg-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+  .div-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:18px}
+  .div-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px}
+  .div-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .div-name{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px}
+  .div-dot{width:10px;height:10px;border-radius:2px}
+  .div-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+  .div-metric{background:var(--gray);border-radius:7px;padding:8px 10px}
+  .div-metric .label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+  .div-metric .val{font-size:15px;font-weight:600;margin-top:2px}
+  .div-metric .chg{font-size:10px;margin-top:1px;font-weight:500}
+  .cam-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid var(--border);font-size:12px}
+  .mini-bar-wrap{flex:1;margin:0 10px;height:4px;background:var(--border);border-radius:2px}
+  .mini-bar{height:100%;border-radius:2px}
+  .table-card{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .table-toolbar{padding:12px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+  .table-scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  thead th{background:var(--gray);color:var(--muted);font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:.4px;padding:9px 12px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--border)}
+  tbody td{padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:var(--gray)}
+  tbody tr.total-row{background:#f0f2f8;font-weight:600}
+  .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600}
+  tr.row-highlighted{background:#e8eaf6 !important;outline:2px solid #1428A0;outline-offset:-2px}
+  th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+  th.sortable:hover{color:var(--blue)}
+  th.sort-asc::after{content:" ▲";color:var(--blue);font-size:9px}
+  th.sort-desc::after{content:" ▼";color:var(--blue);font-size:9px}
+  tr.row-dimmed{opacity:.25}
+  .page{display:none}
+  .page.active{display:block}
+  .acc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+  .acc-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px}
+  .acc-status{display:flex;align-items:center;gap:6px;font-size:12px;margin-top:6px}
+  .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .dot-ok{background:#43a047}.dot-err{background:#e53935}.dot-miss{background:#ff9800}
+  .empty{text-align:center;padding:60px 20px;color:var(--muted)}
+  .pop-bar-pos{background:#1428A0;height:100%;border-radius:2px}
+  .pop-bar-neg{background:#E53935;height:100%;border-radius:2px}
+  @media(max-width:900px){.sidebar{display:none}.main{margin-left:0}.charts-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div style="font-size:22px;font-weight:800;letter-spacing:-1px;margin-bottom:4px">SAM</div>
+    <div class="brand">Search Dashboard</div>
+    <div class="sub">Google Ads · Bi-weekly</div>
+  </div>
+  <nav class="nav">
+    <div class="nav-item active" data-page="overview" onclick="switchPage('overview')">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Overview
+    </div>
+    <div class="nav-item" data-page="divisions" onclick="switchPage('divisions')">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      By Division
+    </div>
+    <div class="nav-item" data-page="table" onclick="switchPage('table')">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      Full Table
+    </div>
+    <div class="nav-item" data-page="campaigns" onclick="switchPage('campaigns')">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      Campaigns
+    </div>
+    <div class="nav-item" data-page="insights" onclick="switchPage('insights')">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Insights
+    </div>
+    <div class="nav-item" data-page="searchterms" onclick="switchPage('searchterms')">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      Search Terms
+    </div>
+    <div class="nav-item" data-page="assets" onclick="switchPage('assets')">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+      Assets
+    </div>
+    <div class="nav-item" data-page="accounts" onclick="switchPage('accounts')">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Account Status
+    </div>
+  </nav>
+  <div class="sidebar-bottom">Samsung Electronics Canada</div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title" id="pageTitle">Overview</div>
+    <div class="topbar-controls">
+      <!-- Hidden real inputs still used by fetch functions -->
+      <input type="hidden" id="startDate" /><input type="hidden" id="endDate" />
+      <input type="hidden" id="prevStartDate" /><input type="hidden" id="prevEndDate" />
+      <!-- Visual range pickers -->
+      <div class="date-group" style="cursor:pointer;position:relative" onclick="openPicker('current')">
+        <label style="cursor:pointer">Current</label>
+        <span id="currentLabel" style="font-size:12px;color:var(--text);white-space:nowrap">Select range</span>
+        <svg width="12" height="12" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      </div>
+      <div class="date-group" style="cursor:pointer;position:relative" onclick="openPicker('previous')">
+        <label style="cursor:pointer">Previous</label>
+        <span id="previousLabel" style="font-size:12px;color:var(--text);white-space:nowrap">Select range</span>
+        <svg width="12" height="12" fill="none" stroke="var(--muted)" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      </div>
+
+      <select id="divFilter"><option value="all">All Divisions</option><option value="MX">MX</option><option value="HE">HE</option><option value="EBD">EBD</option><option value="DA">DA</option><option value="EPP">EPP</option></select>
+      <select id="camFilter"><option value="all">All Campaign Types</option><option value="Text">Text</option><option value="Shopping">Shopping</option><option value="Pmax">Pmax</option><option value="Shop App">Shop App</option></select>
+      <button class="btn btn-primary" id="fetchBtn" onclick="fetchData()">Run Report</button>
+      <button class="btn btn-outline" onclick="exportCSV()">Export CSV</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="status-bar hidden" id="statusBar"><div class="spinner" id="spinner"></div><span id="statusMsg"></span></div>
+
+    <!-- OVERVIEW -->
+    <div class="page active" id="page-overview">
+      <div class="kpi-grid" id="kpiGrid">
+        <div class="empty" style="grid-column:1/-1">
+          <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 9l-5-5-4 4-3-3"/></svg>
+          <p>Select date ranges and click <strong>Run Report</strong> to load data.</p>
+        </div>
+      </div>
+      <div class="charts-grid">
+        <div class="chart-card">
+          <div class="card-header">
+            <span class="card-title">Spend &amp; Revenue by Division</span>
+            <div class="seg" id="barToggle">
+              <button class="seg-btn on" data-m="spend">Spend</button>
+              <button class="seg-btn" data-m="revenue">Revenue</button>
+              <button class="seg-btn" data-m="clicks">Clicks</button>
+            </div>
+          </div>
+          <div class="legend"><div class="leg-item"><span class="leg-dot" style="background:#1428A0"></span>Current</div><div class="leg-item"><span class="leg-dot" style="background:#1428A099"></span>Previous</div></div>
+          <div class="chart-wrap" style="height:220px"><canvas id="barChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="card-header"><span class="card-title">ROAS by Division</span></div>
+          <div class="chart-wrap" style="height:260px"><canvas id="roasChart"></canvas></div>
+        </div>
+        <div class="chart-card full">
+          <div class="card-header"><span class="card-title">Period-over-Period % Change</span><div class="legend" id="popLegend"></div></div>
+          <div class="chart-wrap" style="height:200px"><canvas id="popChart"></canvas></div>
+        </div>
+        <div class="chart-card full">
+          <div class="card-header">
+            <span class="card-title">Impression Share &amp; Top Impression Share</span>
+            <span style="font-size:10px;color:var(--muted)">* Pmax IS = Search network only</span>
+          </div>
+          <div class="chart-wrap" style="height:200px"><canvas id="isChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DIVISIONS -->
+    <div class="page" id="page-divisions">
+      <div class="div-grid" id="divGrid"><div class="empty" style="grid-column:1/-1"><p>Run a report to see division breakdown.</p></div></div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="page" id="page-table">
+      <div class="table-card">
+        <div class="table-toolbar">
+          <span style="font-size:12px;color:var(--muted)">Showing <strong id="rowCount">0</strong> rows</span>
+          <span id="reportPeriod" style="font-size:11px;color:var(--muted);margin-left:auto"></span>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead id="mainTableHead"><tr><th class="sortable" data-col="div" data-type="str">Division</th><th class="sortable" data-col="cam" data-type="str">Campaign Type</th><th class="sortable" data-col="channel_type" data-type="str">Google Type</th><th class="sortable" data-col="spend" data-type="num">Spend</th><th>Prev Spend</th><th>PoP</th><th class="sortable" data-col="impressions" data-type="num">Impressions</th><th class="sortable" data-col="clicks" data-type="num">Clicks</th><th class="sortable" data-col="ctr" data-type="num">CTR</th><th class="sortable" data-col="conversions" data-type="num">Conversions</th><th class="sortable" data-col="revenue" data-type="num">Revenue</th><th class="sortable" data-col="roas" data-type="num">ROAS</th><th>Prev ROAS</th><th>PoP ROAS</th><th class="sortable" data-col="cvr" data-type="num">CVR</th><th class="sortable" data-col="imp_share" data-type="num">Imp. Share</th><th class="sortable" data-col="top_imp_share" data-type="num">Top IS</th></tr></thead>
+            <tbody id="tableBody"><tr><td colspan="17" style="text-align:center;padding:40px;color:var(--muted)">Run a report to see data.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- CAMPAIGNS -->
+    <div class="page" id="page-campaigns">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select id="camDivFilter" onchange="filterCampaigns()"><option value="all">All Divisions</option><option value="MX">MX</option><option value="HE">HE</option><option value="EBD">EBD</option><option value="DA">DA</option><option value="EPP">EPP</option></select>
+          <select id="camTypeFilter" onchange="filterCampaigns()"><option value="all">All Types</option><option value="Text">Text</option><option value="Shopping">Shopping</option><option value="Pmax">Pmax</option><option value="Shop App">Shop App</option></select>
+          <select id="camNameFilter" onchange="renderCampaignIS()"><option value="all">All Campaigns</option></select>
+        </div>
+        <button class="btn btn-primary" onclick="fetchCampaigns()">Load Campaigns</button>
+      </div>
+
+      <!-- IS Lost chart -->
+      <div class="chart-card" style="margin-bottom:14px">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Impression Share Lost — Budget vs Rank</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px">* Search network only &nbsp;|&nbsp; Pmax IS = Search slice</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div class="seg" id="isViewToggle">
+              <button class="seg-btn on" data-v="current">Current</button>
+              <button class="seg-btn" data-v="previous">Previous</button>
+              <button class="seg-btn" data-v="pop">PoP Change</button>
+            </div>
+          </div>
+        </div>
+        <div class="legend">
+          <div class="leg-item"><span class="leg-dot" style="background:#E53935"></span>Lost to Budget</div>
+          <div class="leg-item"><span class="leg-dot" style="background:#FF7B00"></span>Lost to Rank</div>
+          <div class="leg-item"><span class="leg-dot" style="background:#1428A0"></span>IS Won</div>
+          <div class="leg-item"><span class="leg-dot" style="background:#43A047"></span>Top IS</div>
+          <div class="leg-item"><span class="leg-dot" style="background:#00B9E4"></span>Abs Top IS</div>
+        </div>
+        <div class="chart-wrap" style="height:280px"><canvas id="isLostChart"></canvas></div>
+      </div>
+
+      <!-- KPI strip -->
+      <div class="kpi-grid" id="camKpis" style="margin-bottom:14px"></div>
+
+      <!-- Campaign table -->
+      <div class="table-card">
+        <div class="table-toolbar">
+          <span style="font-size:12px;color:var(--muted)">Showing <strong id="camRowCount">0</strong> campaigns</span>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead id="camTableHead"><tr><th class="sortable" data-col="div" data-type="str">Division</th><th class="sortable" data-col="campaign_name" data-type="str">Campaign</th><th class="sortable" data-col="campaign_type" data-type="str">Type</th><th class="sortable" data-col="cur.spend" data-type="num">Spend</th><th>PoP Spend</th><th class="sortable" data-col="cur.impressions" data-type="num">Impressions</th><th class="sortable" data-col="cur.clicks" data-type="num">Clicks</th><th class="sortable" data-col="cur.conversions" data-type="num">Conversions</th><th class="sortable" data-col="cur.revenue" data-type="num">Revenue</th><th class="sortable" data-col="roas" data-type="num">ROAS</th><th>PoP ROAS</th><th class="sortable" data-col="cur.imp_share" data-type="num">Imp Share</th><th class="sortable" data-col="cur.top_is" data-type="num">Top IS</th><th class="sortable" data-col="cur.abs_top_is" data-type="num">Abs Top IS</th><th class="sortable" data-col="cur.budget_lost_is" data-type="num">Lost Budget</th><th>PoP Budget Lost</th><th class="sortable" data-col="cur.rank_lost_is" data-type="num">Lost Rank</th><th>PoP Rank Lost</th></tr></thead>
+            <tbody id="camTableBody"><tr><td colspan="18" style="text-align:center;padding:40px;color:var(--muted)">Click "Load Campaigns" to fetch data.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ACCOUNTS -->
+
+    <!-- INSIGHTS PAGE -->
+    <div class="page" id="page-insights">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select id="insDivFilter">
+            <option value="all">All Divisions</option>
+            <option value="MX">MX</option>
+            <option value="HE">HE</option>
+            <option value="EBD">EBD</option>
+            <option value="DA">DA</option>
+            <option value="EPP">EPP</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="generateInsights()">Generate Insights</button>
+      </div>
+
+      <div id="insEmpty" style="text-align:center;padding:60px 20px;color:var(--muted)">
+        <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin-bottom:12px;opacity:.4"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <p style="font-size:13px">Select a date range and click <strong>Generate Insights</strong>.</p>
+        <p style="font-size:12px;margin-top:6px;opacity:.7">Pulls all available data from the API and generates a full strategic report.</p>
+      </div>
+
+      <div id="insLoading" style="display:none;text-align:center;padding:60px 20px">
+        <div class="spinner" style="width:28px;height:28px;border-width:3px;margin:0 auto 16px;border-color:#1428A0;border-top-color:transparent"></div>
+        <p style="font-size:13px;color:var(--muted)" id="insLoadMsg">Fetching data from Google Ads API...</p>
+      </div>
+
+      <div id="insContent" style="display:none">
+        <div class="chart-card" style="margin-bottom:14px">
+          <div class="card-header"><span class="card-title">Performance Summary</span><span id="insPeriodLabel" style="font-size:11px;color:var(--muted)"></span></div>
+          <div id="insSummary"></div>
+        </div>
+
+        <div class="kpi-grid" id="insKpis" style="margin-bottom:14px"></div>
+
+        <div class="chart-card" style="margin-bottom:14px">
+          <div class="card-header">
+            <span class="card-title">AI-Generated Strategic Report</span>
+            <button class="btn btn-outline" style="font-size:11px;padding:4px 10px" onclick="copyInsights()">Copy Report</button>
+          </div>
+          <div id="insReport" style="font-size:13px;line-height:1.75;color:var(--text)"></div>
+        </div>
+
+        <div class="charts-grid" style="margin-bottom:14px">
+          <div class="chart-card">
+            <div class="card-header"><span class="card-title">Device Breakdown</span></div>
+            <table><thead><tr><th>Device</th><th>Spend</th><th>ROAS</th><th>CTR</th><th>CVR</th><th>Conv.</th></tr></thead>
+            <tbody id="insDeviceTable"></tbody></table>
+          </div>
+          <div class="chart-card">
+            <div class="card-header"><span class="card-title">Day of Week Performance</span></div>
+            <table><thead><tr><th>Day</th><th>Spend</th><th>ROAS</th><th>Conversions</th><th>Revenue</th></tr></thead>
+            <tbody id="insDowTable"></tbody></table>
+          </div>
+        </div>
+
+        <div class="chart-card" style="margin-bottom:14px">
+          <div class="card-header"><span class="card-title">Top Keywords</span></div>
+          <div class="table-scroll"><table><thead><tr><th>Keyword</th><th>Match</th><th>Spend</th><th>Clicks</th><th>Conv.</th><th>ROAS</th><th>IS%</th><th>Avg CPC</th></tr></thead>
+          <tbody id="insKeywordTable"></tbody></table></div>
+        </div>
+
+        <div class="chart-card" style="margin-bottom:14px">
+          <div class="card-header"><span class="card-title">Top Search Terms</span></div>
+          <div class="table-scroll"><table><thead><tr><th>Search Term</th><th>Spend</th><th>Clicks</th><th>Conv.</th><th>Revenue</th><th>CTR</th><th>ROAS</th></tr></thead>
+          <tbody id="insSearchTermTable"></tbody></table></div>
+        </div>
+
+        <div class="chart-card" style="margin-bottom:14px">
+          <div class="card-header"><span class="card-title">Pmax Asset Groups</span></div>
+          <div class="table-scroll"><table><thead><tr><th>Asset Group</th><th>Campaign</th><th>Ad Strength</th><th>Spend</th><th>Conv.</th><th>ROAS</th></tr></thead>
+          <tbody id="insAssetTable"></tbody></table></div>
+        </div>
+
+        <div class="chart-card" style="margin-bottom:14px">
+          <div class="card-header"><span class="card-title">Audience Performance</span></div>
+          <div class="table-scroll"><table><thead><tr><th>Audience</th><th>Campaign</th><th>Spend</th><th>Clicks</th><th>Conv.</th><th>ROAS</th><th>CTR</th></tr></thead>
+          <tbody id="insAudienceTable"></tbody></table></div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- SEARCH TERMS PAGE -->
+    <div class="page" id="page-searchterms">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select id="stDivFilter" onchange="fetchSearchTermsData()">
+            <option value="all">All Divisions</option>
+            <option value="MX">MX</option><option value="HE">HE</option>
+            <option value="EBD">EBD</option><option value="DA">DA</option><option value="EPP">EPP</option>
+          </select>
+          <select id="stCamFilter" onchange="renderSearchTermsPage()">
+            <option value="all">All Campaign Types</option>
+            <option value="Text">Text</option><option value="Shopping">Shopping</option><option value="Pmax">Pmax</option>
+          </select>
+          <input id="stSearch" type="text" placeholder="Search terms..." oninput="renderSearchTermsPage()"
+            style="border:1px solid var(--border);border-radius:7px;padding:6px 10px;font-size:12px;outline:none;width:200px">
+        </div>
+<button class="btn btn-primary" onclick="fetchSearchTermsData()">Load Search Terms</button>
+        <span id="stCount" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div class="kpi-grid" id="stKpis" style="margin-bottom:14px"></div>
+      <div class="charts-grid" style="margin-bottom:14px">
+        <div class="chart-card">
+          <div class="card-header"><span class="card-title">Top 10 Terms by Spend</span></div>
+          <div class="chart-wrap" style="height:240px"><canvas id="stSpendChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="card-header"><span class="card-title">Top 10 Terms by Conversions</span></div>
+          <div class="chart-wrap" style="height:240px"><canvas id="stConvChart"></canvas></div>
+        </div>
+      </div>
+      <div class="table-card">
+        <div class="table-scroll">
+          <table id="stTable">
+            <thead><tr>
+              <th class="sortable" data-col="term" data-type="str">Search Term</th>
+              <th class="sortable" data-col="div" data-type="str">Division</th>
+              <th class="sortable" data-col="spend" data-type="num">Spend</th>
+              <th class="sortable" data-col="impressions" data-type="num">Impressions</th>
+              <th class="sortable" data-col="clicks" data-type="num">Clicks</th>
+              <th class="sortable" data-col="ctr" data-type="num">CTR</th>
+              <th class="sortable" data-col="conversions" data-type="num">Conv.</th>
+              <th class="sortable" data-col="revenue" data-type="num">Revenue</th>
+              <th class="sortable" data-col="roas" data-type="num">ROAS</th>
+            </tr></thead>
+            <tbody id="stBody"><tr><td colspan="9" style="text-align:center;padding:40px;color:var(--muted)">Run a report to see search term data.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ASSETS PAGE -->
+    <div class="page" id="page-assets">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select id="assDivFilter" onchange="renderAssetsPage()">
+            <option value="all">All Divisions</option>
+            <option value="MX">MX</option><option value="HE">HE</option>
+            <option value="EBD">EBD</option><option value="DA">DA</option><option value="EPP">EPP</option>
+          </select>
+          <select id="assTypeFilter" onchange="renderAssetsPage()">
+            <option value="all">All Asset Types</option>
+            <option value="Headline">Headline</option>
+            <option value="Long Headline">Long Headline</option>
+            <option value="Description">Description</option>
+            <option value="Image">Image</option>
+            <option value="Square Image">Square Image</option>
+            <option value="Portrait Image">Portrait Image</option>
+            <option value="Logo">Logo</option>
+            <option value="YouTube Video">YouTube Video</option>
+            <option value="Callout">Callout</option>
+            <option value="Sitelink">Sitelink</option>
+            <option value="Call to Action">Call to Action</option>
+            <option value="Business Name">Business Name</option>
+          </select>
+          <select id="assStrengthFilter" onchange="renderAssetsPage()">
+            <option value="all">All Strengths</option>
+            <option value="EXCELLENT">Excellent</option><option value="GOOD">Good</option>
+            <option value="AVERAGE">Average</option><option value="POOR">Poor</option>
+          </select>
+        </div>
+<button class="btn btn-primary" onclick="fetchAssetsData()">Load Assets</button>
+        <span id="assCount" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div class="kpi-grid" id="assStrengthKpis" style="margin-bottom:14px"></div>
+      <div class="charts-grid" style="margin-bottom:14px">
+        <div class="chart-card">
+          <div class="card-header"><span class="card-title">Assets by Type</span></div>
+          <div class="chart-wrap" style="height:220px"><canvas id="assRoasChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="card-header"><span class="card-title">Assets by Performance Label</span></div>
+          <div class="chart-wrap" style="height:220px"><canvas id="assSpendChart"></canvas></div>
+        </div>
+      </div>
+      <div class="table-card">
+        <div class="table-scroll">
+          <table id="assTable">
+            <thead><tr>
+              <th class="sortable" data-col="category" data-type="str">Asset Type</th>
+              <th class="sortable" data-col="content" data-type="str">Content</th>
+              <th class="sortable" data-col="div" data-type="str">Division</th>
+              <th class="sortable" data-col="asset_group" data-type="str">Asset Group</th>
+              <th class="sortable" data-col="campaign" data-type="str">Campaign</th>
+              <th class="sortable" data-col="performance" data-type="str">Performance</th>
+              <th class="sortable" data-col="ad_strength" data-type="str">Group Strength</th>
+              <th class="sortable" data-col="spend" data-type="num">Group Spend</th>
+              <th class="sortable" data-col="impressions" data-type="num">Impressions</th>
+              <th class="sortable" data-col="clicks" data-type="num">Clicks</th>
+              <th class="sortable" data-col="conversions" data-type="num">Conv.</th>
+              <th class="sortable" data-col="revenue" data-type="num">Revenue</th>
+              <th class="sortable" data-col="roas" data-type="num">ROAS</th>
+            </tr></thead>
+            <tbody id="assBody"><tr><td colspan="12" style="text-align:center;padding:40px;color:var(--muted)">Generate Insights first to load Pmax asset data.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="page" id="page-accounts">
+      <div style="margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:13px;color:var(--muted)">Verifies connectivity to each Google Ads account.</span>
+        <button class="btn btn-primary" onclick="checkAccounts()">Check Accounts</button>
+      </div>
+      <div class="acc-grid" id="accGrid"><div class="empty" style="grid-column:1/-1"><p>Click "Check Accounts" to verify connectivity.</p></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DIV_COLORS={MX:'#1428A0',HE:'#00B9E4',EBD:'#E53935',DA:'#FF7B00',EPP:'#43A047','Shop App':'#9C27B0'};
+let reportData=[], campaignData=[], highlightedCampaign=null;
+let activeMetric='spend', activeISView='current';
+let charts={};
+
+function isoDate(d){return d.toISOString().split('T')[0]}
+// ─── Calendar picker state ────────────────────────────────────────────────────
+var calMode=null, calYear=0, calMonth=0, calSelStart=null, calSelEnd=null;
+
+function isoToDate(s){var p=s.split('-');return new Date(+p[0],+p[1]-1,+p[2])}
+function fmtLabel(s,e){
+  var sd=isoToDate(s),ed=isoToDate(e);
+  var opts={month:'short',day:'numeric'};
+  return sd.toLocaleDateString('en',opts)+' – '+ed.toLocaleDateString('en',opts);
+}
+
+function setPickerValues(mode,start,end){
+  if(mode==='current'){
+    document.getElementById('startDate').value=start;
+    document.getElementById('endDate').value=end;
+    document.getElementById('currentLabel').textContent=fmtLabel(start,end);
+  } else {
+    document.getElementById('prevStartDate').value=start;
+    document.getElementById('prevEndDate').value=end;
+    document.getElementById('previousLabel').textContent=fmtLabel(start,end);
+  }
+}
+
+function openPicker(mode){
+  calMode=mode;
+  calSelStart=null;calSelEnd=null;
+  var now=new Date();
+  calYear=now.getFullYear();calMonth=now.getMonth();
+  document.getElementById('calTitle').textContent=mode==='current'?'Select current period':'Select previous period';
+  document.getElementById('calApplyBtn').disabled=true;
+  var ov=document.getElementById('calOverlay');ov.style.display='block';ov.style.pointerEvents='all';
+  renderCal();
+}
+
+function closePicker(){var ov=document.getElementById('calOverlay');ov.style.display='none';ov.style.pointerEvents='none';}
+
+function applyPicker(){
+  if(!calSelStart||!calSelEnd)return;
+  var a=calSelStart<calSelEnd?calSelStart:calSelEnd;
+  var b=calSelStart<calSelEnd?calSelEnd:calSelStart;
+  setPickerValues(calMode,a,b);
+  closePicker();
+}
+
+function calNav(dir){
+  calMonth+=dir;
+  if(calMonth>11){calMonth=0;calYear++;}
+  if(calMonth<0){calMonth=11;calYear--;}
+  renderCal();
+}
+
+function calClickDay(iso){
+  if(!calSelStart||calSelEnd){
+    calSelStart=iso;calSelEnd=null;
+    document.getElementById('calHint').textContent='Now click the end date';
+    document.getElementById('calApplyBtn').disabled=true;
+  } else {
+    calSelEnd=iso;
+    var a=calSelStart<calSelEnd?calSelStart:calSelEnd;
+    var b=calSelStart<calSelEnd?calSelEnd:calSelStart;
+    calSelStart=a;calSelEnd=b;
+    document.getElementById('calHint').textContent=fmtLabel(a,b);
+    document.getElementById('calApplyBtn').disabled=false;
+  }
+  renderCal();
+}
+
+function renderCal(){
+  var months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('calMonthLabel').textContent=months[calMonth]+' '+calYear;
+  var grid=document.getElementById('calGrid');
+  grid.innerHTML='';
+  // Day headers
+  ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(function(d){
+    var h=document.createElement('div');
+    h.textContent=d;
+    h.style.cssText='font-size:10px;color:#6b7280;text-align:center;padding:3px;font-weight:600';
+    grid.appendChild(h);
+  });
+  // Empty cells before first day
+  var first=new Date(calYear,calMonth,1).getDay();
+  for(var i=0;i<first;i++){
+    var empty=document.createElement('div');
+    grid.appendChild(empty);
+  }
+  // Day cells
+  var daysInMonth=new Date(calYear,calMonth+1,0).getDate();
+  for(var d=1;d<=daysInMonth;d++){
+    var mm=String(calMonth+1).padStart(2,'0'),dd=String(d).padStart(2,'0');
+    var iso=calYear+'-'+mm+'-'+dd;
+    var isStart=iso===calSelStart,isEnd=iso===calSelEnd;
+    var inRange=calSelStart&&calSelEnd&&iso>=calSelStart&&iso<=calSelEnd;
+    var bg=isStart||isEnd?'#1428A0':inRange?'#e8eaf6':'transparent';
+    var col=isStart||isEnd?'#fff':'#1a1a2e';
+    var fw=isStart||isEnd?'700':'400';
+    var el=document.createElement('div');
+    el.textContent=d;
+    el.dataset.iso=iso;
+    el.style.cssText='text-align:center;padding:5px 2px;border-radius:6px;font-size:12px;cursor:pointer;background:'+bg+';color:'+col+';font-weight:'+fw;
+    el.addEventListener('click',function(){calClickDay(this.dataset.iso);});
+    el.addEventListener('mouseover',function(){
+      if(this.style.background==='transparent')this.style.background='#f5f6fa';
+    });
+    el.addEventListener('mouseout',function(){
+      var iso=this.dataset.iso;
+      var isSt=iso===calSelStart,isEn=iso===calSelEnd;
+      var inR=calSelStart&&calSelEnd&&iso>=calSelStart&&iso<=calSelEnd;
+      this.style.background=isSt||isEn?'#1428A0':inR?'#e8eaf6':'transparent';
+    });
+    grid.appendChild(el);
+  }
+}
+
+(function setDefaults(){
+  const today=new Date();
+  const end=new Date(today); end.setDate(end.getDate()-1);
+  const start=new Date(end); start.setDate(start.getDate()-13);
+  const pEnd=new Date(start); pEnd.setDate(pEnd.getDate()-1);
+  const pStart=new Date(pEnd); pStart.setDate(pStart.getDate()-13);
+  setPickerValues('current',isoDate(start),isoDate(end));
+  setPickerValues('previous',isoDate(pStart),isoDate(pEnd));
+})();
+
+const pageTitles={overview:'Overview',divisions:'By Division',table:'Full Table',campaigns:'Campaigns',insights:'Insights',searchterms:'Search Terms',assets:'Assets',accounts:'Account Status'};
+function switchPage(p){
+  document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
+  document.getElementById('page-'+p).classList.add('active');
+  document.querySelector('[data-page="'+p+'"]').classList.add('active');
+  document.getElementById('pageTitle').textContent=pageTitles[p]||p;
+  if (p==='searchterms') { if(stData.length) setTimeout(renderSearchTermsPage, 50); }
+  if (p==='assets')      { if(assData.length) setTimeout(renderAssetsPage, 50); }
+}
+
+function setStatus(type,msg){
+  const bar=document.getElementById('statusBar');
+  bar.className='status-bar '+type;
+  document.getElementById('statusMsg').textContent=msg;
+  document.getElementById('spinner').style.display=type==='loading'?'block':'none';
+}
+function hideStatus(){document.getElementById('statusBar').className='status-bar hidden'}
+
+const fmtUSD=v=>'$'+Intl.NumberFormat('en',{minimumFractionDigits:2,maximumFractionDigits:2}).format(v);
+const fmtNum=v=>Intl.NumberFormat('en',{notation:'compact',maximumFractionDigits:1}).format(v);
+const fmtCPC=v=>'$'+v.toFixed(2);
+const fmtPct=v=>v.toFixed(2)+'%';
+const fmtROAS=v=>v.toFixed(2)+'x';
+const fmtChg=v=>(v>0?'+':'')+v.toFixed(1)+'pp';
+function pct(a,b){return b?((a-b)/b*100):0}
+function pp(a,b){return a-b}  // percentage point difference for IS metrics
+function arrow(v){return v>0.05?'▲':v<-0.05?'▼':'–'}
+function chgClass(v){return Math.abs(v)<0.05?'flat':v>0?'up':'down'}
+function destroyChart(id){if(charts[id]){charts[id].destroy();delete charts[id]}}
+
+// ─── Main report fetch ────────────────────────────────────────────────────────
+async function fetchData(){
+  const params={startDate:document.getElementById('startDate').value,endDate:document.getElementById('endDate').value,prevStartDate:document.getElementById('prevStartDate').value,prevEndDate:document.getElementById('prevEndDate').value};
+  if(!params.startDate||!params.endDate||!params.prevStartDate||!params.prevEndDate){setStatus('error','Please fill in all four date fields.');return}
+  const btn=document.getElementById('fetchBtn');
+  btn.disabled=true;
+  setStatus('loading','Fetching data from Google Ads API…');
+  try{
+    const res=await fetch('/api/report?'+new URLSearchParams(params));
+    const json=await res.json();
+    if(!res.ok)throw new Error(json.error||'API error');
+    reportData=json.rows||[];
+    const period=json.periods;
+    document.getElementById('reportPeriod').textContent='Current: '+period.current.startDate+' → '+period.current.endDate+'   |   Previous: '+period.previous.startDate+' → '+period.previous.endDate;
+    setStatus('success','Loaded '+reportData.length+' rows · '+new Date(json.generatedAt).toLocaleTimeString());
+    setTimeout(hideStatus,4000);
+    renderAll();
+  }catch(e){setStatus('error','Error: '+e.message)}
+  finally{btn.disabled=false}
+}
+
+function filteredRows(){
+  const div=document.getElementById('divFilter').value;
+  const cam=document.getElementById('camFilter').value;
+  return reportData.filter(r=>{
+    const dOk=div==='all'||r.div===div;
+    const cOk=cam==='all'||r.cam===cam||r.cam==='total'||r.cam==='EPP';
+    return dOk&&cOk;
+  });
+}
+
+// When a campaign type is selected, use that type's rows aggregated per division.
+// When no filter, use the pre-aggregated total rows.
+function totalRows(){
+  const cam=document.getElementById('camFilter').value;
+  if(cam==='all'){
+    // Use pre-aggregated totals
+    return filteredRows().filter(r=>r.cam==='total'||r.cam==='EPP');
+  }
+  // Campaign type is filtered — use the specific campaign type rows, one per division
+  const divFilter=document.getElementById('divFilter').value;
+  const rows=reportData.filter(r=>{
+    const dOk=divFilter==='all'||r.div===divFilter;
+    return dOk&&r.cam===cam;
+  });
+  // Aggregate per division so charts get one bar per division
+  const byDiv={};
+  rows.forEach(r=>{
+    if(!byDiv[r.div]) byDiv[r.div]={
+      div:r.div, cam:cam,
+      spend:0, impressions:0, clicks:0, conversions:0, revenue:0,
+      imp_share:0, top_imp_share:0, is_count:0,
+      prev:{spend:0, impressions:0, clicks:0, conversions:0, revenue:0, roas:0, ctr:0, cvr:0},
+    };
+    const d=byDiv[r.div];
+    d.spend+=r.spend; d.impressions+=r.impressions; d.clicks+=r.clicks;
+    d.conversions+=r.conversions; d.revenue+=r.revenue;
+    if(r.imp_share>0){d.imp_share+=r.imp_share; d.top_imp_share+=r.top_imp_share; d.is_count++;}
+    // Accumulate prev
+    d.prev.spend+=(r.prev?.spend||0); d.prev.impressions+=(r.prev?.impressions||0);
+    d.prev.clicks+=(r.prev?.clicks||0); d.prev.conversions+=(r.prev?.conversions||0);
+    d.prev.revenue+=(r.prev?.revenue||0);
+  });
+  return Object.values(byDiv).map(d=>{
+    d.roas=d.spend>0?d.revenue/d.spend:0;
+    d.ctr=d.impressions>0?(d.clicks/d.impressions)*100:0;
+    d.cvr=d.clicks>0?(d.conversions/d.clicks)*100:0;
+    if(d.is_count>0){d.imp_share/=d.is_count; d.top_imp_share/=d.is_count;}
+    d.prev.roas=d.prev.spend>0?d.prev.revenue/d.prev.spend:0;
+    d.prev.ctr=d.prev.impressions>0?(d.prev.clicks/d.prev.impressions)*100:0;
+    d.prev.cvr=d.prev.clicks>0?(d.prev.conversions/d.prev.clicks)*100:0;
+    return d;
+  });
+}
+
+function renderKPIs(){
+  const rows=totalRows();
+  let c={spend:0,imp:0,clicks:0,conv:0,rev:0},p={spend:0,imp:0,clicks:0,conv:0,rev:0};
+  rows.forEach(r=>{c.spend+=r.spend;c.imp+=r.impressions;c.clicks+=r.clicks;c.conv+=r.conversions;c.rev+=r.revenue;p.spend+=(r.prev?.spend||0);p.imp+=(r.prev?.impressions||0);p.clicks+=(r.prev?.clicks||0);p.conv+=(r.prev?.conversions||0);p.rev+=(r.prev?.revenue||0)});
+  const ctr=c.imp>0?(c.clicks/c.imp*100):0,pctr=p.imp>0?(p.clicks/p.imp*100):0;
+  const roas=c.spend>0?c.rev/c.spend:0,proas=p.spend>0?p.rev/p.spend:0;
+  const cvr=c.clicks>0?(c.conv/c.clicks*100):0,pcvr=p.clicks>0?(p.conv/p.clicks*100):0;
+  const metrics=[{label:'Total Spend',val:c.spend,prev:p.spend,fmt:fmtUSD},{label:'Impressions',val:c.imp,prev:p.imp,fmt:fmtNum},{label:'Clicks',val:c.clicks,prev:p.clicks,fmt:fmtNum},{label:'Conversions',val:c.conv,prev:p.conv,fmt:fmtNum},{label:'Revenue',val:c.rev,prev:p.rev,fmt:fmtUSD},{label:'Avg ROAS',val:roas,prev:proas,fmt:fmtROAS},{label:'CTR',val:ctr,prev:pctr,fmt:fmtPct},{label:'CVR',val:cvr,prev:pcvr,fmt:fmtPct}];
+  document.getElementById('kpiGrid').innerHTML=metrics.map(m=>{const d=pct(m.val,m.prev);return'<div class="kpi-card"><div class="kpi-label">'+m.label+'</div><div class="kpi-val">'+m.fmt(m.val)+'</div><div class="kpi-delta '+chgClass(d)+'">'+arrow(d)+' '+Math.abs(d).toFixed(1)+'% vs prev</div><div class="kpi-prev">Prev: '+m.fmt(m.prev)+'</div></div>'}).join('');
+}
+
+function renderBarChart(){
+  const rows=totalRows();
+  const colors=rows.map(r=>DIV_COLORS[r.div]||'#888');
+  destroyChart('bar');
+  charts.bar=new Chart(document.getElementById('barChart'),{type:'bar',data:{labels:rows.map(r=>r.div),datasets:[{label:'Current',data:rows.map(r=>r[activeMetric]||0),backgroundColor:colors,borderRadius:4},{label:'Previous',data:rows.map(r=>(r.prev?.[activeMetric]||0)),backgroundColor:colors.map(c=>c+'66'),borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{color:'#999',font:{size:10},callback:v=>activeMetric==='spend'||activeMetric==='revenue'?'$'+Intl.NumberFormat('en',{notation:'compact'}).format(v):Intl.NumberFormat('en',{notation:'compact'}).format(v)},grid:{color:'#f0f0f0'}},x:{ticks:{color:'#666',font:{size:11}},grid:{display:false}}}}});
+}
+
+function renderROASChart(){
+  const rows=totalRows();
+  destroyChart('roas');
+  charts.roas=new Chart(document.getElementById('roasChart'),{type:'bar',data:{labels:rows.map(r=>r.div),datasets:[{label:'Current ROAS',data:rows.map(r=>+r.roas.toFixed(2)),backgroundColor:rows.map(r=>DIV_COLORS[r.div]||'#888'),borderRadius:4},{label:'Prev ROAS',data:rows.map(r=>+(r.prev?.roas||0).toFixed(2)),backgroundColor:rows.map(r=>(DIV_COLORS[r.div]||'#888')+'66'),borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{color:'#999',font:{size:10},callback:v=>v+'x'},grid:{color:'#f0f0f0'}},x:{ticks:{color:'#666',font:{size:11}},grid:{display:false}}}}});
+}
+
+function renderPoPChart(){
+  const rows=totalRows();
+  const metrics=[{k:'spend',l:'Spend',c:'#1428A0'},{k:'revenue',l:'Revenue',c:'#43A047'},{k:'clicks',l:'Clicks',c:'#00B9E4'},{k:'conversions',l:'Conv',c:'#FF7B00'},{k:'roas',l:'ROAS',c:'#9C27B0'}];
+  document.getElementById('popLegend').innerHTML=metrics.map(m=>'<div class="leg-item"><span class="leg-dot" style="background:'+m.c+'"></span>'+m.l+'</div>').join('');
+  destroyChart('pop');
+  charts.pop=new Chart(document.getElementById('popChart'),{type:'bar',data:{labels:rows.map(r=>r.div),datasets:metrics.map(m=>({label:m.l,data:rows.map(r=>+pct(r[m.k],r.prev?.[m.k]||0).toFixed(1)),backgroundColor:m.c+'99',borderColor:m.c,borderWidth:1.5,borderRadius:3}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{color:'#999',font:{size:10},callback:v=>v+'%'},grid:{color:'#f0f0f0'}},x:{ticks:{color:'#666',font:{size:11}},grid:{display:false}}}}});
+}
+
+function renderISChart(){
+  const rows=totalRows();
+  destroyChart('is');
+  charts.is=new Chart(document.getElementById('isChart'),{type:'bar',data:{labels:rows.map(r=>r.div),datasets:[{label:'Imp. Share',data:rows.map(r=>+r.imp_share.toFixed(1)),backgroundColor:'#1428A0BB',borderRadius:4},{label:'Top IS',data:rows.map(r=>+r.top_imp_share.toFixed(1)),backgroundColor:'#00B9E4BB',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{max:100,ticks:{color:'#999',font:{size:10},callback:v=>v+'%'},grid:{color:'#f0f0f0'}},x:{ticks:{color:'#666',font:{size:11}},grid:{display:false}}}}});
+}
+
+function renderDivCards(){
+  const divs=[...new Set(filteredRows().map(r=>r.div))];
+  document.getElementById('divGrid').innerHTML=divs.map(div=>{
+    const total=filteredRows().find(r=>r.div===div&&(r.cam==='total'||r.cam==='EPP'));
+    if(!total)return'';
+    const camRows=filteredRows().filter(r=>r.div===div&&r.cam!=='total'&&r.cam!=='EPP');
+    const maxSpend=Math.max(...camRows.map(r=>r.spend),1);
+    const color=DIV_COLORS[div]||'#888';
+    const spChg=pct(total.spend,total.prev?.spend||0);
+    return'<div class="div-card"><div class="div-header"><div class="div-name"><span class="div-dot" style="background:'+color+'"></span>'+div+'</div><span class="'+chgClass(spChg)+'" style="font-size:12px;font-weight:600">'+arrow(spChg)+' '+Math.abs(spChg).toFixed(1)+'% spend</span></div><div class="div-metrics">'+[['Spend',total.spend,total.prev?.spend||0,fmtUSD],['Revenue',total.revenue,total.prev?.revenue||0,fmtUSD],['Clicks',total.clicks,total.prev?.clicks||0,fmtNum],['ROAS',total.roas,total.prev?.roas||0,fmtROAS]].map(([l,v,pv,f])=>{const ch=pct(v,pv);return'<div class="div-metric"><div class="label">'+l+'</div><div class="val">'+f(v)+'</div><div class="chg '+chgClass(ch)+'">'+arrow(ch)+' '+Math.abs(ch).toFixed(1)+'%</div></div>'}).join('')+'</div>'+(camRows.length?'<div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Campaign breakdown</div>'+camRows.map(r=>'<div class="cam-row"><span style="color:var(--muted)">'+r.cam+'</span><div class="mini-bar-wrap"><div class="mini-bar" style="width:'+(r.spend/maxSpend*100).toFixed(0)+'%;background:'+color+'"></div></div><span style="font-weight:600;font-size:11px">'+fmtUSD(r.spend)+'</span><span class="'+chgClass(pct(r.spend,r.prev?.spend||0))+'" style="font-size:10px;margin-left:6px">'+arrow(pct(r.spend,r.prev?.spend||0))+' '+Math.abs(pct(r.spend,r.prev?.spend||0)).toFixed(1)+'%</span></div>').join(''):'')+'</div>';
+  }).join('');
+}
+
+function renderTable(){
+  let rows = filteredRows();
+  // Apply sort if active
+  const activeKey = Object.keys(sortState).find(k => k.startsWith('mainTable:') && sortState[k] !== 'none');
+  if (activeKey) {
+    const col = activeKey.split(':')[1];
+    const dir = sortState[activeKey];
+    const th = document.querySelector('#mainTableHead th[data-col="'+col+'"]');
+    const type = th ? th.dataset.type : 'str';
+    rows = [...rows].sort((a,b) => {
+      const av = a[col] !== undefined ? a[col] : 0;
+      const bv = b[col] !== undefined ? b[col] : 0;
+      let cmp = type === 'num' ? (Number(av)||0)-(Number(bv)||0) : String(av).localeCompare(String(bv));
+      return dir === 'desc' ? -cmp : cmp;
+    });
+  }
+  document.getElementById('rowCount').textContent=rows.length;
+  document.getElementById('tableBody').innerHTML=rows.map(r=>{
+    const isTotal=r.cam==='total'||r.cam==='EPP';
+    const spChg=pct(r.spend,r.prev?.spend||0);
+    const roChg=pct(r.roas,r.prev?.roas||0);
+    const color=DIV_COLORS[r.div]||'#888';
+    return'<tr class="'+(isTotal?'total-row':'')+'"><td><span style="display:inline-flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:2px;background:'+color+'"></span>'+r.div+'</span></td><td>'+r.cam+'</td><td style="color:var(--muted);font-size:11px">'+(r.channel_type||'—')+'</td><td>'+fmtUSD(r.spend)+'</td><td style="color:var(--muted)">'+fmtUSD(r.prev?.spend||0)+'</td><td class="'+chgClass(spChg)+'">'+arrow(spChg)+' '+Math.abs(spChg).toFixed(1)+'%</td><td>'+fmtNum(r.impressions)+'</td><td>'+fmtNum(r.clicks)+'</td><td>'+fmtPct(r.ctr)+'</td><td>'+fmtNum(r.conversions)+'</td><td>'+fmtUSD(r.revenue)+'</td><td>'+fmtROAS(r.roas)+'</td><td style="color:var(--muted)">'+fmtROAS(r.prev?.roas||0)+'</td><td class="'+chgClass(roChg)+'">'+arrow(roChg)+' '+Math.abs(roChg).toFixed(1)+'%</td><td>'+fmtPct(r.cvr)+'</td><td>'+fmtPct(r.imp_share)+'</td><td>'+fmtPct(r.top_imp_share)+'</td></tr>';
+  }).join('');
+}
+
+function renderAll(){renderKPIs();renderBarChart();renderROASChart();renderPoPChart();renderISChart();renderDivCards();renderTable()}
+
+document.getElementById('barToggle').addEventListener('click',e=>{
+  const btn=e.target.closest('[data-m]');if(!btn)return;
+  activeMetric=btn.dataset.m;
+  document.querySelectorAll('#barToggle .seg-btn').forEach(b=>b.classList.toggle('on',b===btn));
+  renderBarChart();
+});
+['divFilter','camFilter'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{if(reportData.length)renderAll()}));
+
+// ─── Campaign IS view toggle ──────────────────────────────────────────────────
+document.getElementById('isViewToggle').addEventListener('click',e=>{
+  const btn=e.target.closest('[data-v]');if(!btn)return;
+  activeISView=btn.dataset.v;
+  document.querySelectorAll('#isViewToggle .seg-btn').forEach(b=>b.classList.toggle('on',b===btn));
+  renderCampaignIS();
+});
+
+// ─── Campaigns fetch ──────────────────────────────────────────────────────────
+async function fetchCampaigns(){
+  const params={startDate:document.getElementById('startDate').value,endDate:document.getElementById('endDate').value,prevStartDate:document.getElementById('prevStartDate').value,prevEndDate:document.getElementById('prevEndDate').value};
+  if(!params.startDate||!params.endDate){setStatus('error','Please set date ranges first.');return}
+  setStatus('loading','Fetching campaign-level data from Google Ads...');
+  try{
+    const res=await fetch('/api/campaigns?'+new URLSearchParams(params));
+    const json=await res.json();
+    if(!res.ok)throw new Error(json.error||'API error');
+    campaignData=json.campaigns||[];
+    setStatus('success','Loaded '+campaignData.length+' campaigns');
+    setTimeout(hideStatus,3000);
+    filterCampaigns();
+  }catch(e){setStatus('error','Error: '+e.message)}
+}
+
+function filteredCampaigns(){
+  const div=document.getElementById('camDivFilter').value;
+  const type=document.getElementById('camTypeFilter').value;
+  return campaignData.filter(c=>(div==='all'||c.div===div)&&(type==='all'||c.campaign_type===type)&&c.cur.spend>0);
+}
+
+function selectedCampaigns(){
+  const name=document.getElementById('camNameFilter').value;
+  const filtered=filteredCampaigns();
+  if(name==='all')return filtered;
+  return filtered.filter(c=>c.campaign_name===name);
+}
+
+function filterCampaigns(){
+  const filtered=filteredCampaigns();
+  const sel=document.getElementById('camNameFilter');
+  const current=sel.value;
+  sel.innerHTML='<option value="all">All Campaigns ('+filtered.length+')</option>'+filtered.map(c=>'<option value="'+c.campaign_name.replace(/"/g,'&quot;')+'">'+c.campaign_name+'</option>').join('');
+  const opt=[...sel.options].find(o=>o.value===current);
+  if(opt)sel.value=current;
+  renderCampaignIS();
+}
+
+// ─── IS Lost chart with PoP toggle ────────────────────────────────────────────
+function renderCampaignIS(){
+  const campaigns=selectedCampaigns();
+  document.getElementById('camRowCount').textContent=filteredCampaigns().length;
+  destroyChart('isLost');
+  if(!campaigns.length)return;
+
+  const labels=campaigns.map(c=>c.campaign_name.length>30?c.campaign_name.substring(0,28)+'…':c.campaign_name);
+
+  let datasets;
+  if(activeISView==='pop'){
+    // PoP = percentage point change (current minus previous)
+    datasets=[
+      {label:'Lost to Budget ΔPP',data:campaigns.map(c=>+(c.cur.budget_lost_is-c.prev.budget_lost_is).toFixed(1)),backgroundColor:'#E5393599',borderColor:'#E53935',borderWidth:1.5,borderRadius:3},
+      {label:'Lost to Rank ΔPP',  data:campaigns.map(c=>+(c.cur.rank_lost_is-c.prev.rank_lost_is).toFixed(1)),  backgroundColor:'#FF7B0099',borderColor:'#FF7B00',borderWidth:1.5,borderRadius:3},
+      {label:'IS Won ΔPP',         data:campaigns.map(c=>+(c.cur.imp_share-c.prev.imp_share).toFixed(1)),         backgroundColor:'#1428A099',borderColor:'#1428A0',borderWidth:1.5,borderRadius:3},
+      {label:'Top IS ΔPP',         data:campaigns.map(c=>+(c.cur.top_is-c.prev.top_is).toFixed(1)),               backgroundColor:'#43A04799',borderColor:'#43A047',borderWidth:1.5,borderRadius:3},
+      {label:'Abs Top IS ΔPP',     data:campaigns.map(c=>+(c.cur.abs_top_is-c.prev.abs_top_is).toFixed(1)),       backgroundColor:'#00B9E499',borderColor:'#00B9E4',borderWidth:1.5,borderRadius:3},
+    ];
+  } else {
+    const src=activeISView==='previous'?'prev':'cur';
+    datasets=[
+      {label:'Lost to Budget',data:campaigns.map(c=>+c[src].budget_lost_is.toFixed(1)),backgroundColor:'#E5393599',borderColor:'#E53935',borderWidth:1.5,borderRadius:3},
+      {label:'Lost to Rank',  data:campaigns.map(c=>+c[src].rank_lost_is.toFixed(1)),  backgroundColor:'#FF7B0099',borderColor:'#FF7B00',borderWidth:1.5,borderRadius:3},
+      {label:'IS Won',        data:campaigns.map(c=>+c[src].imp_share.toFixed(1)),     backgroundColor:'#1428A099',borderColor:'#1428A0',borderWidth:1.5,borderRadius:3},
+      {label:'Top IS',        data:campaigns.map(c=>+c[src].top_is.toFixed(1)),        backgroundColor:'#43A04799',borderColor:'#43A047',borderWidth:1.5,borderRadius:3},
+      {label:'Abs Top IS',    data:campaigns.map(c=>+c[src].abs_top_is.toFixed(1)),    backgroundColor:'#00B9E499',borderColor:'#00B9E4',borderWidth:1.5,borderRadius:3},
+    ];
+  }
+
+  const isPop=activeISView==='pop';
+  charts.isLost=new Chart(document.getElementById('isLostChart'),{
+    type:'bar',
+    data:{labels,datasets},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+(isPop?(ctx.raw>0?'+':'')+ctx.raw+'pp':ctx.raw+'%')}}},
+      onClick:(evt,els)=>{
+        if(!els.length){highlightedCampaign=null;applyHighlight();return;}
+        const idx=els[0].index;
+        const name=campaigns[idx]?campaigns[idx].campaign_name:null;
+        highlightedCampaign=(highlightedCampaign===name)?null:name;
+        applyHighlight();
+      },
+      scales:{
+        x:{ticks:{color:'#666',font:{size:10},maxRotation:35},grid:{display:false}},
+        y:{
+          ticks:{color:'#999',font:{size:10},callback:v=>isPop?(v>0?'+':'')+v+'pp':v+'%'},
+          grid:{color:'#f0f0f0'},
+          max:isPop?undefined:100,
+        }
+      }
+    }
+  });
+
+  renderCampaignKPIs(campaigns);
+  renderCampaignTable(filteredCampaigns());
+}
+
+function renderCampaignKPIs(campaigns){
+  if(!campaigns.length){document.getElementById('camKpis').innerHTML='';return}
+  let c={spend:0,rev:0,conv:0,imp_share:0,budget_lost:0,rank_lost:0},p={spend:0,rev:0},isCount=0;
+  campaigns.forEach(cam=>{
+    c.spend+=cam.cur.spend;c.rev+=cam.cur.revenue;c.conv+=cam.cur.conversions;
+    if(cam.cur.imp_share>0){c.imp_share+=cam.cur.imp_share;isCount++}
+    c.budget_lost+=cam.cur.budget_lost_is;c.rank_lost+=cam.cur.rank_lost_is;
+    p.spend+=cam.prev.spend;p.rev+=cam.prev.revenue;
+  });
+  const avgIS=isCount>0?c.imp_share/isCount:0;
+  const avgBudget=campaigns.length>0?c.budget_lost/campaigns.length:0;
+  const avgRank=campaigns.length>0?c.rank_lost/campaigns.length:0;
+  const roas=c.spend>0?c.rev/c.spend:0,proas=p.spend>0?p.rev/p.spend:0;
+  const metrics=[{label:'Spend',val:c.spend,prev:p.spend,fmt:fmtUSD},{label:'Revenue',val:c.rev,prev:p.rev,fmt:fmtUSD},{label:'ROAS',val:roas,prev:proas,fmt:fmtROAS},{label:'Conversions',val:c.conv,prev:0,fmt:fmtNum},{label:'Avg Imp Share',val:avgIS,prev:0,fmt:fmtPct},{label:'Avg Lost Budget',val:avgBudget,prev:0,fmt:fmtPct},{label:'Avg Lost Rank',val:avgRank,prev:0,fmt:fmtPct}];
+  document.getElementById('camKpis').innerHTML=metrics.map(m=>{const d=m.prev?pct(m.val,m.prev):null;return'<div class="kpi-card"><div class="kpi-label">'+m.label+'</div><div class="kpi-val">'+m.fmt(m.val)+'</div>'+(d!==null?'<div class="kpi-delta '+chgClass(d)+'">'+arrow(d)+' '+Math.abs(d).toFixed(1)+'% vs prev</div>':'')+'</div>'}).join('');
+}
+
+function renderCampaignTable(campaigns){
+  // Apply sort if active
+  const activeKey = Object.keys(sortState).find(k => k.startsWith('camTable:') && sortState[k] !== 'none');
+  if (activeKey) {
+    const col = activeKey.split(':')[1];
+    const dir = sortState[activeKey];
+    const th = document.querySelector('#camTableHead th[data-col="'+col+'"]');
+    const type = th ? th.dataset.type : 'str';
+    campaigns = [...campaigns].sort((a,b) => {
+      // Support nested keys like cur.spend
+      const getVal = (obj, path) => path.split('.').reduce((o,k) => o?.[k], obj) ?? 0;
+      const av = getVal(a, col);
+      const bv = getVal(b, col);
+      // For roas, compute on the fly
+      const av2 = col==='roas' ? (a.cur?.spend>0?a.cur.revenue/a.cur.spend:0) : av;
+      const bv2 = col==='roas' ? (b.cur?.spend>0?b.cur.revenue/b.cur.spend:0) : bv;
+      let cmp = type === 'num' ? (Number(av2)||0)-(Number(bv2)||0) : String(av2).localeCompare(String(bv2));
+      return dir === 'desc' ? -cmp : cmp;
+    });
+  }
+  document.getElementById('camRowCount').textContent=campaigns.length;
+  document.getElementById('camTableBody').innerHTML=campaigns.map(c=>{
+    const color=DIV_COLORS[c.div]||'#888';
+    const spChg=pct(c.cur.spend,c.prev.spend);
+    const curRoas=c.cur.spend>0?c.cur.revenue/c.cur.spend:0;
+    const prevRoas=c.prev.spend>0?c.prev.revenue/c.prev.spend:0;
+    const roasDelta=pct(curRoas,prevRoas);
+    const budgetPP=+(c.cur.budget_lost_is-c.prev.budget_lost_is).toFixed(1);
+    const rankPP=+(c.cur.rank_lost_is-c.prev.rank_lost_is).toFixed(1);
+    const ppClass=v=>Math.abs(v)<0.1?'flat':v>0?'down':'up'; // for lost IS, increase is bad
+    const escapedName=c.campaign_name.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+    return'<tr data-campaign="'+escapedName+'" onclick="highlightFromTable(this)" style="cursor:pointer">'+
+      '<td><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:'+color+'"></span>'+c.div+'</span></td>'+
+      '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+c.campaign_name+'">'+c.campaign_name+'</td>'+
+      '<td><span class="pill" style="background:'+color+'22;color:'+color+'">'+c.campaign_type+'</span></td>'+
+      '<td>'+fmtUSD(c.cur.spend)+'</td>'+
+      '<td class="'+chgClass(spChg)+'">'+arrow(spChg)+' '+Math.abs(spChg).toFixed(1)+'%</td>'+
+      '<td>'+fmtNum(c.cur.impressions)+'</td>'+
+      '<td>'+fmtNum(c.cur.clicks)+'</td>'+
+      '<td>'+fmtNum(c.cur.conversions)+'</td>'+
+      '<td>'+fmtUSD(c.cur.revenue)+'</td>'+
+      '<td>'+fmtROAS(curRoas)+'</td>'+
+      '<td class="'+chgClass(roasDelta)+'">'+arrow(roasDelta)+' '+Math.abs(roasDelta).toFixed(1)+'%</td>'+
+      '<td>'+(c.cur.imp_share>0?fmtPct(c.cur.imp_share):'—')+'</td>'+
+      '<td>'+(c.cur.top_is>0?fmtPct(c.cur.top_is):'—')+'</td>'+
+      '<td>'+(c.cur.abs_top_is>0?fmtPct(c.cur.abs_top_is):'—')+'</td>'+
+      '<td class="'+(c.cur.budget_lost_is>15?'down':'flat')+'">'+(c.cur.budget_lost_is>0?fmtPct(c.cur.budget_lost_is):'—')+'</td>'+
+      '<td class="'+ppClass(budgetPP)+'">'+(c.cur.budget_lost_is>0||c.prev.budget_lost_is>0?(budgetPP>0?'+':'')+budgetPP+'pp':'—')+'</td>'+
+      '<td class="'+(c.cur.rank_lost_is>15?'down':'flat')+'">'+(c.cur.rank_lost_is>0?fmtPct(c.cur.rank_lost_is):'—')+'</td>'+
+      '<td class="'+ppClass(rankPP)+'">'+(c.cur.rank_lost_is>0||c.prev.rank_lost_is>0?(rankPP>0?'+':'')+rankPP+'pp':'—')+'</td>'+
+      '</tr>';
+  }).join('');
+}
+
+
+// ─── Bidirectional highlight ──────────────────────────────────────────────────
+function applyHighlight(){
+  // Update table rows
+  document.querySelectorAll('#camTableBody tr').forEach(function(row){
+    var name=row.dataset.campaign;
+    if(!highlightedCampaign){
+      row.classList.remove('row-highlighted','row-dimmed');
+    } else if(name===highlightedCampaign){
+      row.classList.add('row-highlighted');
+      row.classList.remove('row-dimmed');
+      row.scrollIntoView({behavior:'smooth',block:'nearest'});
+    } else {
+      row.classList.add('row-dimmed');
+      row.classList.remove('row-highlighted');
+    }
+  });
+  // Update chart bar colors
+  if(!charts.isLost) return;
+  var campaigns=selectedCampaigns();
+  charts.isLost.data.datasets.forEach(function(ds){
+    ds.backgroundColor=campaigns.map(function(c,i){
+      var base=ds.borderColor;
+      if(!highlightedCampaign) return base+'99';
+      return c.campaign_name===highlightedCampaign ? base+'EE' : base+'18';
+    });
+  });
+  charts.isLost.update('none');
+}
+
+function highlightFromTable(row){
+  var name=row.dataset.campaign;
+  highlightedCampaign=(highlightedCampaign===name)?null:name;
+  applyHighlight();
+  if(highlightedCampaign){
+    document.getElementById('isLostChart').scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
+}
+
+
+// ─── Insights ─────────────────────────────────────────────────────────────────
+let insightsRawData = null;
+
+async function generateInsights() {
+  const startDate = document.getElementById('startDate').value;
+  const endDate   = document.getElementById('endDate').value;
+  const prevStart = document.getElementById('prevStartDate').value;
+  const prevEnd   = document.getElementById('prevEndDate').value;
+  const div       = document.getElementById('insDivFilter').value;
+
+  if (!startDate || !endDate) { setStatus('error','Please select date ranges first.'); return; }
+
+  document.getElementById('insEmpty').style.display   = 'none';
+  document.getElementById('insContent').style.display = 'none';
+  document.getElementById('insLoading').style.display = 'block';
+  document.getElementById('insLoadMsg').textContent   = 'Fetching data from Google Ads API...';
+
+  try {
+    const qs  = new URLSearchParams({ startDate, endDate, prevStartDate: prevStart||startDate, prevEndDate: prevEnd||endDate, div }).toString();
+    const res = await fetch('/api/insights?' + qs);
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'API error');
+    insightsRawData = json;
+
+    document.getElementById('insLoadMsg').textContent = 'Generating AI report...';
+    document.getElementById('insPeriodLabel').textContent = startDate + ' → ' + endDate;
+
+    renderInsightsTables(json);
+    renderInsightsKPIs(json);
+    await generateAIReport(json, startDate, endDate, prevStart, prevEnd);
+
+    document.getElementById('insLoading').style.display = 'none';
+    document.getElementById('insContent').style.display = 'block';
+
+  } catch(e) {
+    document.getElementById('insLoading').style.display = 'none';
+    document.getElementById('insEmpty').style.display   = 'block';
+    setStatus('error', 'Insights error: ' + e.message);
+  }
+}
+
+function renderInsightsKPIs(data) {
+  let spend=0,rev=0,clicks=0,imp=0,conv=0,pSpend=0,pRev=0,pClicks=0,pImp=0,pConv=0;
+  Object.values(data.divisions).forEach(d => {
+    d.campaigns.forEach(c => { spend+=c.spend; rev+=c.revenue; clicks+=c.clicks; imp+=c.impressions; conv+=c.conversions; });
+  });
+  Object.values(data.prevTotals||{}).forEach(p => { pSpend+=p.spend; pRev+=p.revenue; pClicks+=p.clicks; pImp+=p.impressions; pConv+=p.conversions; });
+  const roas=spend>0?rev/spend:0, proas=pSpend>0?pRev/pSpend:0;
+  const ctr=imp>0?(clicks/imp)*100:0, pctr=pImp>0?(pClicks/pImp)*100:0;
+  const cvr=clicks>0?(conv/clicks)*100:0, pcvr=pClicks>0?(pConv/pClicks)*100:0;
+  const metrics=[
+    {label:'Spend',val:spend,prev:pSpend,fmt:fmtUSD},
+    {label:'Revenue',val:rev,prev:pRev,fmt:fmtUSD},
+    {label:'ROAS',val:roas,prev:proas,fmt:fmtROAS},
+    {label:'Conversions',val:conv,prev:pConv,fmt:fmtNum},
+    {label:'Clicks',val:clicks,prev:pClicks,fmt:fmtNum},
+    {label:'CTR',val:ctr,prev:pctr,fmt:fmtPct},
+    {label:'CVR',val:cvr,prev:pcvr,fmt:fmtPct},
+  ];
+  document.getElementById('insKpis').innerHTML = metrics.map(m => {
+    const d=pct(m.val,m.prev);
+    return '<div class="kpi-card"><div class="kpi-label">'+m.label+'</div><div class="kpi-val">'+m.fmt(m.val)+'</div><div class="kpi-delta '+chgClass(d)+'">'+arrow(d)+' '+Math.abs(d).toFixed(1)+'% vs prev</div><div class="kpi-prev">Prev: '+m.fmt(m.prev)+'</div></div>';
+  }).join('');
+}
+
+function renderInsightsTables(data) {
+  // Aggregate across all divisions
+  const allCampaigns=[], allSearchTerms=[], allDevices={}, allDow={}, allKeywords=[], allAssetGroups=[], allAudiences=[];
+
+  Object.values(data.divisions).forEach(d => {
+    allCampaigns.push(...d.campaigns);
+    allSearchTerms.push(...d.searchTerms);
+    allKeywords.push(...d.keywords);
+    allAssetGroups.push(...d.assetGroups);
+    allAudiences.push(...d.audiences);
+    d.devices.forEach(dev => {
+      if (!allDevices[dev.device]) allDevices[dev.device]={device:dev.device,spend:0,impressions:0,clicks:0,conversions:0,revenue:0};
+      allDevices[dev.device].spend+=dev.spend; allDevices[dev.device].impressions+=dev.impressions;
+      allDevices[dev.device].clicks+=dev.clicks; allDevices[dev.device].conversions+=dev.conversions;
+      allDevices[dev.device].revenue+=dev.revenue;
+    });
+    d.dayOfWeek.forEach(dow => {
+      if (!allDow[dow.day]) allDow[dow.day]={day:dow.day,spend:0,conversions:0,revenue:0};
+      allDow[dow.day].spend+=dow.spend; allDow[dow.day].conversions+=dow.conversions; allDow[dow.day].revenue+=dow.revenue;
+    });
+  });
+
+  // Device table
+  const devices = Object.values(allDevices).filter(d=>d.spend>0).sort((a,b)=>b.spend-a.spend).map(d => {
+    d.roas=d.spend>0?d.revenue/d.spend:0; d.ctr=d.impressions>0?(d.clicks/d.impressions)*100:0; d.cvr=d.clicks>0?(d.conversions/d.clicks)*100:0; return d;
+  });
+  document.getElementById('insDeviceTable').innerHTML = devices.map(d =>
+    '<tr><td><strong>'+d.device+'</strong></td><td>'+fmtUSD(d.spend)+'</td><td>'+fmtROAS(d.roas)+'</td><td>'+fmtPct(d.ctr)+'</td><td>'+fmtPct(d.cvr)+'</td><td>'+fmtNum(d.conversions)+'</td></tr>'
+  ).join('');
+
+  // DOW table
+  const dowOrder = ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY','SUNDAY'];
+  const dowRows = dowOrder.filter(d=>allDow[d]).map(d => { allDow[d].roas=allDow[d].spend>0?allDow[d].revenue/allDow[d].spend:0; return allDow[d]; });
+  document.getElementById('insDowTable').innerHTML = dowRows.map(d =>
+    '<tr><td><strong>'+d.day+'</strong></td><td>'+fmtUSD(d.spend)+'</td><td>'+fmtROAS(d.roas)+'</td><td>'+fmtNum(d.conversions)+'</td><td>'+fmtUSD(d.revenue)+'</td></tr>'
+  ).join('');
+
+  // Keywords — consolidate by keyword+match_type across all campaigns
+  const kwMap = {};
+  allKeywords.forEach(k => {
+    const key = k.keyword + '|' + k.match_type;
+    if (!kwMap[key]) kwMap[key] = { keyword: k.keyword, match_type: k.match_type, spend:0, clicks:0, conversions:0, revenue:0, imp_share_sum:0, imp_share_count:0, cpc_sum:0, cpc_count:0 };
+    const m = kwMap[key];
+    m.spend       += k.spend;
+    m.clicks      += k.clicks;
+    m.conversions += k.conversions;
+    m.revenue     += k.revenue;
+    if (k.imp_share > 0) { m.imp_share_sum += k.imp_share; m.imp_share_count++; }
+    if (k.avg_cpc > 0)   { m.cpc_sum += k.avg_cpc * k.clicks; m.cpc_count += k.clicks; }
+  });
+  const consolidatedKw = Object.values(kwMap).map(m => ({
+    ...m,
+    roas:      m.spend > 0 ? m.revenue / m.spend : 0,
+    imp_share: m.imp_share_count > 0 ? m.imp_share_sum / m.imp_share_count : 0,
+    avg_cpc:   m.cpc_count > 0 ? m.cpc_sum / m.cpc_count : 0,
+  })).sort((a,b) => b.spend - a.spend).slice(0, 30);
+
+  document.getElementById('insKeywordTable').innerHTML = consolidatedKw.map(k =>
+    '<tr><td><strong>'+k.keyword+'</strong></td><td><span class="pill" style="background:#e8eaf6;color:#1428A0">'+k.match_type+'</span></td><td>'+fmtUSD(k.spend)+'</td><td>'+fmtNum(k.clicks)+'</td><td>'+fmtNum(k.conversions)+'</td><td>'+fmtROAS(k.roas)+'</td><td>'+(k.imp_share>0?fmtPct(k.imp_share):'—')+'</td><td>'+fmtUSD(k.avg_cpc)+'</td></tr>'
+  ).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--muted)">No keyword data available</td></tr>';
+
+  // Search terms — consolidate by term across all campaigns
+  const termMap = {};
+  allSearchTerms.forEach(t => {
+    if (!termMap[t.term]) termMap[t.term] = { term: t.term, spend:0, clicks:0, conversions:0, revenue:0, impressions:0 };
+    const m = termMap[t.term];
+    m.spend       += t.spend;
+    m.clicks      += t.clicks;
+    m.conversions += t.conversions;
+    m.revenue     += t.revenue;
+    m.impressions += t.impressions;
+  });
+  const consolidatedTerms = Object.values(termMap).map(m => ({
+    ...m,
+    ctr: m.impressions > 0 ? (m.clicks / m.impressions) * 100 : 0,
+    roas: m.spend > 0 ? m.revenue / m.spend : 0,
+  })).sort((a,b) => b.spend - a.spend).slice(0, 30);
+
+  document.getElementById('insSearchTermTable').innerHTML = consolidatedTerms.map(t =>
+    '<tr><td><strong>'+t.term+'</strong></td><td>'+fmtUSD(t.spend)+'</td><td>'+fmtNum(t.clicks)+'</td><td>'+fmtNum(t.conversions)+'</td><td>'+fmtUSD(t.revenue)+'</td><td>'+fmtPct(t.ctr)+'</td><td>'+(t.roas>0?fmtROAS(t.roas):'—')+'</td></tr>'
+  ).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--muted)">No search term data available</td></tr>';
+
+  // Asset groups table
+  const topAssets = allAssetGroups.sort((a,b)=>b.spend-a.spend).slice(0,20);
+  const adStrengthColor = {EXCELLENT:'#2e7d32',GOOD:'#43A047',AVERAGE:'#FF7B00',POOR:'#E53935',PENDING:'#6b7280',NO_ADS:'#E53935'};
+  document.getElementById('insAssetTable').innerHTML = topAssets.map(a =>
+    '<tr><td><strong>'+a.name+'</strong></td><td>'+a.campaign+'</td><td><span style="color:'+(adStrengthColor[a.ad_strength]||'#666')+';font-weight:600">'+a.ad_strength+'</span></td><td>'+fmtUSD(a.spend)+'</td><td>'+fmtNum(a.conversions)+'</td><td>'+fmtROAS(a.roas)+'</td></tr>'
+  ).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--muted)">No Pmax asset group data available</td></tr>';
+
+  // Audiences table
+  const topAudiences = allAudiences.sort((a,b)=>b.spend-a.spend).slice(0,20);
+  document.getElementById('insAudienceTable').innerHTML = topAudiences.map(a =>
+    '<tr><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">'+a.user_list+'</td><td>'+a.campaign+'</td><td>'+fmtUSD(a.spend)+'</td><td>'+fmtNum(a.clicks)+'</td><td>'+fmtNum(a.conversions)+'</td><td>'+fmtROAS(a.roas)+'</td><td>'+fmtPct(a.ctr)+'</td></tr>'
+  ).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--muted)">No audience data available</td></tr>';
+}
+
+async function generateAIReport(data, startDate, endDate, prevStart, prevEnd) {
+  // Build a rich data summary to send to Claude
+  const divSummaries = Object.entries(data.divisions).map(([div, d]) => {
+    const totalSpend = d.campaigns.reduce((s,c)=>s+c.spend,0);
+    const totalRev   = d.campaigns.reduce((s,c)=>s+c.revenue,0);
+    const totalConv  = d.campaigns.reduce((s,c)=>s+c.conversions,0);
+    const totalClicks= d.campaigns.reduce((s,c)=>s+c.clicks,0);
+    const totalImp   = d.campaigns.reduce((s,c)=>s+c.impressions,0);
+    const roas       = totalSpend>0?totalRev/totalSpend:0;
+    const ctr        = totalImp>0?(totalClicks/totalImp)*100:0;
+    const cvr        = totalClicks>0?(totalConv/totalClicks)*100:0;
+    const prev       = data.prevTotals[div]||{};
+    const roasPop    = prev.roas>0?((roas-prev.roas)/prev.roas*100).toFixed(1):null;
+    const spendPop   = prev.spend>0?((totalSpend-prev.spend)/prev.spend*100).toFixed(1):null;
+
+    const topCampaigns = [...d.campaigns].sort((a,b)=>b.spend-a.spend).slice(0,5).map(c =>
+      `${c.name} (${c.type}): $${c.spend.toFixed(0)} spend, ROAS ${c.roas.toFixed(2)}x, ${c.conversions.toFixed(0)} conv, IS ${c.imp_share.toFixed(1)}%, Budget Lost IS ${c.budget_lost_is.toFixed(1)}%, Rank Lost IS ${c.rank_lost_is.toFixed(1)}%`
+    ).join('\n');
+
+    const kwMapAI = {};
+    d.keywords.forEach(k => {
+      const key = k.keyword+'|'+k.match_type;
+      if (!kwMapAI[key]) kwMapAI[key]={keyword:k.keyword,match_type:k.match_type,spend:0,clicks:0,conversions:0,revenue:0,is_sum:0,is_n:0};
+      kwMapAI[key].spend+=k.spend; kwMapAI[key].clicks+=k.clicks; kwMapAI[key].conversions+=k.conversions; kwMapAI[key].revenue+=k.revenue;
+      if(k.imp_share>0){kwMapAI[key].is_sum+=k.imp_share;kwMapAI[key].is_n++;}
+    });
+    const topKeywords = Object.values(kwMapAI)
+      .map(k=>({...k,roas:k.spend>0?k.revenue/k.spend:0,imp_share:k.is_n>0?k.is_sum/k.is_n:0}))
+      .sort((a,b)=>b.spend-a.spend).slice(0,10)
+      .map(k=>`"${k.keyword}" [${k.match_type}]: $${k.spend.toFixed(0)}, ROAS ${k.roas.toFixed(2)}x, ${k.conversions.toFixed(0)} conv, IS ${k.imp_share.toFixed(1)}%`)
+      .join('\n');
+
+    const termMapAI = {};
+    d.searchTerms.forEach(t => {
+      if(!termMapAI[t.term]) termMapAI[t.term]={term:t.term,spend:0,clicks:0,conversions:0,revenue:0,impressions:0};
+      termMapAI[t.term].spend+=t.spend; termMapAI[t.term].clicks+=t.clicks; termMapAI[t.term].conversions+=t.conversions;
+      termMapAI[t.term].revenue+=t.revenue; termMapAI[t.term].impressions+=t.impressions;
+    });
+    const topTerms = Object.values(termMapAI)
+      .map(t=>({...t,ctr:t.impressions>0?(t.clicks/t.impressions)*100:0}))
+      .sort((a,b)=>b.spend-a.spend).slice(0,10)
+      .map(t=>`"${t.term}": $${t.spend.toFixed(0)}, CTR ${t.ctr.toFixed(2)}%, ${t.conversions.toFixed(0)} conv, $${t.revenue.toFixed(0)} rev`)
+      .join('\n');
+
+    const deviceSummary = d.devices.map(dev =>
+      `${dev.device}: $${dev.spend.toFixed(0)} (ROAS ${dev.roas.toFixed(2)}x, CTR ${dev.ctr.toFixed(2)}%, CVR ${dev.cvr.toFixed(2)}%)`
+    ).join(', ');
+
+    const dowSummary = d.dayOfWeek.sort((a,b)=>b.roas-a.roas).map(dow =>
+      `${dow.day}: ROAS ${dow.roas.toFixed(2)}x, $${dow.spend.toFixed(0)} spend`
+    ).join(', ');
+
+    const assetSummary = d.assetGroups.slice(0,5).map(a =>
+      `${a.name} [${a.ad_strength}]: $${a.spend.toFixed(0)}, ROAS ${a.roas.toFixed(2)}x, ${a.conversions.toFixed(0)} conv`
+    ).join('\n');
+
+    const audienceSummary = d.audiences.slice(0,5).map(a =>
+      `${a.user_list}: $${a.spend.toFixed(0)}, ROAS ${a.roas.toFixed(2)}x, CTR ${a.ctr.toFixed(2)}%`
+    ).join('\n');
+
+    return `
+=== DIVISION: ${div} ===
+CURRENT PERIOD (${startDate} to ${endDate}):
+Total Spend: $${totalSpend.toFixed(2)}
+Total Revenue: $${totalRev.toFixed(2)}
+ROAS: ${roas.toFixed(2)}x
+CTR: ${ctr.toFixed(2)}%
+CVR: ${cvr.toFixed(2)}%
+Total Conversions: ${totalConv.toFixed(0)}
+Total Clicks: ${totalClicks.toFixed(0)}
+Total Impressions: ${totalImp.toFixed(0)}
+
+PREVIOUS PERIOD (${prevStart} to ${prevEnd}):
+Spend: $${(prev.spend||0).toFixed(2)} | Revenue: $${(prev.revenue||0).toFixed(2)} | ROAS: ${(prev.roas||0).toFixed(2)}x | CTR: ${(prev.ctr||0).toFixed(2)}% | CVR: ${(prev.cvr||0).toFixed(2)}%
+PoP Changes: Spend ${spendPop!==null?spendPop+'%':'N/A'}, ROAS ${roasPop!==null?roasPop+'%':'N/A'}
+
+TOP CAMPAIGNS:
+${topCampaigns||'No data'}
+
+TOP KEYWORDS BY SPEND:
+${topKeywords||'No keyword data'}
+
+TOP SEARCH TERMS BY SPEND:
+${topTerms||'No search term data'}
+
+DEVICE BREAKDOWN: ${deviceSummary||'No data'}
+
+DAY OF WEEK (by ROAS): ${dowSummary||'No data'}
+
+PMAX ASSET GROUPS:
+${assetSummary||'No Pmax data'}
+
+AUDIENCE PERFORMANCE:
+${audienceSummary||'No audience data'}
+`;
+  }).join('\n\n');
+
+  const prompt = `You are a senior performance marketing analyst specializing in Google Ads for Samsung Electronics Canada. You have been given detailed Google Ads data for the period ${startDate} to ${endDate} across Samsung's divisions (MX, HE, EBD, DA, EPP). Your task is to write a comprehensive, granular strategic insights report following the exact structure below.
+
+Be highly specific — reference actual numbers, campaign names, keywords, search terms, and devices from the data. Do not write generic observations. Every insight must be grounded in the data provided. Write at length — each section should be thorough and detailed.
+
+DATA:
+${divSummaries}
+
+Write the full report in this exact structure using markdown formatting:
+
+## Performance Summary
+
+**Total Spend:** [value]
+**Total Revenue:** [value]
+**Overall ROAS:** [value]x
+**CTR:** [value]% ([vs previous period comparison])
+**Conversion Rate:** [value]% ([vs previous period comparison])
+
+**One-line Summary:**
+[Write a specific, honest one-sentence summary of the period's performance — reference specific numbers and what drove them]
+
+---
+
+## Key Highlights — What Worked Well
+
+### Highlight 1: [Specific title]
+[Write 4-6 sentences explaining what worked, why it worked, which specific campaigns/keywords/audiences drove it, what the data shows, and what this means strategically for Samsung]
+
+**Supporting Data:**
+| Metric | Value | PoP Change |
+|--------|-------|------------|
+[Include 4-5 rows of specific supporting metrics]
+
+### Highlight 2: [Specific title]
+[Write 4-6 sentences explaining the win with specific data references]
+
+**Supporting Data:**
+| Metric | Value | PoP Change |
+|--------|-------|------------|
+[Include relevant metrics]
+
+### Highlight 3: [Specific title]
+[Write 4-6 sentences]
+
+### Highlight 4: [Specific title based on data — device performance, day-of-week patterns, keyword efficiency, etc.]
+[Write 4-6 sentences]
+
+---
+
+## Low Lights & Improvement Areas
+
+### Issue 1: [Specific issue title from the data]
+[Write 4-6 sentences describing the problem, what the data shows, what the root cause likely is, and what the impact has been]
+
+**Impact:** [Specific quantified impact]
+**Recommended Solution:**
+- [Specific actionable recommendation 1]
+- [Specific actionable recommendation 2]
+- [Specific actionable recommendation 3]
+
+### Issue 2: [Specific issue title]
+[Write 4-6 sentences]
+
+**Impact:** [Specific quantified impact]
+**Recommended Solution:**
+- [Specific recommendations]
+
+### Issue 3: [Specific issue title]
+[Write 4-6 sentences]
+
+---
+
+## Campaign-Level Breakdown
+
+[For each division with data, write a paragraph analyzing its campaigns, what campaign types are performing best, which have efficiency issues, IS lost patterns, and what to do about them. Be specific about campaign names and numbers.]
+
+---
+
+## Keyword & Search Term Intelligence
+
+[Write a detailed analysis of the keyword data — which match types are most efficient, which keywords have the best/worst ROAS, which search terms are driving value vs waste, any patterns in the search term data that reveal audience intent, gaps in coverage, or opportunities for new keywords. Reference specific keywords and terms from the data.]
+
+---
+
+## Device & Timing Insights
+
+[Write a detailed analysis of device performance — which device has the best ROAS/CVR/CTR, how mobile vs desktop vs tablet compare, what this means for bid adjustments. Then analyze day-of-week patterns — which days have highest ROAS, highest spend efficiency, where there are peaks and troughs, and what scheduling changes to consider.]
+
+---
+
+## Pmax Asset Group Analysis
+
+[Write a detailed analysis of Pmax asset groups — which have EXCELLENT/GOOD/AVERAGE/POOR strength, how ad strength correlates with ROAS in the data, specific recommendations for improving weak asset groups, and what the asset performance data reveals about creative effectiveness.]
+
+---
+
+## Audience Intelligence
+
+[Write a detailed analysis of audience performance — which audiences are driving the most efficient conversions, ROAS by audience segment, any retargeting vs prospecting patterns visible in the data, and specific recommendations for audience strategy.]
+
+---
+
+## Impression Share Analysis
+
+[Write a detailed analysis of IS metrics across campaigns — where budget is the constraint vs where rank/quality is the constraint, which campaigns have the most room to grow efficiently vs which are already maxed out, and specific recommendations for budget reallocation and bid strategy changes.]
+
+---
+
+## Strategic Takeaways
+
+1. [Specific insight 1 grounded in the data — at least 2-3 sentences]
+2. [Specific insight 2]
+3. [Specific insight 3]
+4. [Specific insight 4]
+5. [Specific insight 5]
+
+---
+
+## Recommended Next Steps
+
+- [ ] [Specific action 1 with owner suggestion and urgency level]
+- [ ] [Specific action 2]
+- [ ] [Specific action 3]
+- [ ] [Specific action 4]
+- [ ] [Specific action 5]
+- [ ] [Specific action 6]`;
+
+  const response = await fetch("/api/ai-report", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt })
+  });
+
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'AI report error');
+
+  const reportText = result.text || '';
+  document.getElementById('insReport').innerHTML = markdownToHTML(reportText);
+  document.getElementById('insSummary').innerHTML = '<p style="font-size:13px;color:var(--muted)">AI report generated from '+Object.keys(data.divisions).join(', ')+' division data.</p>';
+}
+
+function markdownToHTML(md) {
+  return md
+    .replace(/^## (.+)$/gm, '<h2 style="font-size:16px;font-weight:700;color:var(--blue);margin:24px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--blue-light)">$1</h2>')
+    .replace(/^### (.+)$/gm, '<h3 style="font-size:14px;font-weight:600;color:var(--text);margin:16px 0 8px">$1</h3>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^---$/gm, '<hr style="border:none;border-top:1px solid var(--border);margin:20px 0">')
+    .replace(/^- \[ \] (.+)$/gm, '<div style="display:flex;align-items:flex-start;gap:8px;margin:6px 0"><span style="width:16px;height:16px;border:2px solid var(--border);border-radius:3px;flex-shrink:0;margin-top:2px"></span><span>$1</span></div>')
+    .replace(/^- (.+)$/gm, '<div style="display:flex;gap:8px;margin:4px 0"><span style="color:var(--blue);font-weight:700;flex-shrink:0">•</span><span>$1</span></div>')
+    .replace(/^(\d+)\. (.+)$/gm, '<div style="display:flex;gap:8px;margin:8px 0"><span style="color:var(--blue);font-weight:700;min-width:20px">$1.</span><span>$2</span></div>')
+    .replace(/^\|(.+)\|$/gm, function(match) {
+      const cells = match.split('|').filter(c=>c.trim()&&!c.match(/^-+$/));
+      if (!cells.length) return '';
+      return '<tr>' + cells.map(c=>'<td style="padding:6px 10px;border:1px solid var(--border)">'+c.trim()+'</td>').join('') + '</tr>';
+    })
+    .replace(/<tr>(.+?)<\/tr>/gs, function(m, inner) {
+      const isHeader = !/<\/tr>/.test(inner) && inner.includes('Metric');
+      return isHeader ? '<thead><tr style="background:var(--gray)">'+inner+'</tr></thead>' : '<tbody><tr>'+inner+'</tr></tbody>';
+    })
+    .replace(/(<thead>.*?<tbody>.*?<\/tbody>)/gs, '<table style="width:100%;border-collapse:collapse;margin:10px 0;font-size:12px">$1</table>')
+    .replace(/\n\n/g, '</p><p style="margin:8px 0">')
+    .replace(/\n/g, '<br>')
+    .replace(/^(?!<[hpdt])(.*[^>])$/gm, '<p style="margin:6px 0">$1</p>');
+}
+
+function copyInsights() {
+  const text = document.getElementById('insReport').innerText;
+  navigator.clipboard.writeText(text).then(() => setStatus('success','Report copied to clipboard'));
+}
+
+
+// ─── Sortable tables ──────────────────────────────────────────────────────────
+const sortState = {};
+
+function initSortable(tableId, renderFn) {
+  const table = document.getElementById(tableId);
+  if (!table) return;
+  table.querySelectorAll('th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      const type = th.dataset.type;
+      const key = tableId + ':' + col;
+      // Cycle: none -> desc -> asc -> none
+      const cur = sortState[key] || 'none';
+      const next = cur === 'none' ? 'desc' : cur === 'desc' ? 'asc' : 'none';
+      // Clear all headers in this table
+      table.querySelectorAll('th.sortable').forEach(h => {
+        h.classList.remove('sort-asc','sort-desc');
+        delete sortState[tableId + ':' + h.dataset.col];
+      });
+      sortState[key] = next;
+      if (next !== 'none') th.classList.add(next === 'desc' ? 'sort-desc' : 'sort-asc');
+      renderFn();
+    });
+  });
+}
+
+function applySortToRows(rows, tableId) {
+  // Find active sort for this table
+  const activeKey = Object.keys(sortState).find(k => k.startsWith(tableId+':') && sortState[k] !== 'none');
+  if (!activeKey) return rows;
+  const col = activeKey.split(':')[1];
+  const dir = sortState[activeKey];
+  const th = document.querySelector('#'+tableId+' th[data-col="'+col+'"]');
+  const type = th ? th.dataset.type : 'str';
+  return [...rows].sort((a,b) => {
+    const av = a[col] !== undefined ? a[col] : '';
+    const bv = b[col] !== undefined ? b[col] : '';
+    let cmp = type === 'num' ? (Number(av)||0) - (Number(bv)||0) : String(av).localeCompare(String(bv));
+    return dir === 'desc' ? -cmp : cmp;
+  });
+}
+
+// ─── Search Terms page data store ────────────────────────────────────────────
+let stData = []; // flat array of {term, div, campaign_type, spend, impressions, clicks, ctr, conversions, revenue, roas}
+
+async function fetchSearchTermsData() {
+  const startDate = document.getElementById('startDate').value;
+  const endDate   = document.getElementById('endDate').value;
+  const div       = document.getElementById('stDivFilter').value;
+  if (!startDate || !endDate) {
+    document.getElementById('stBody').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--muted)">Please select date ranges first then come back.</td></tr>';
+    return;
+  }
+  document.getElementById('stBody').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--muted)"><div class="spinner" style="margin:0 auto;border-color:#1428A0;border-top-color:transparent"></div></td></tr>';
+  try {
+    const qs = new URLSearchParams({ startDate, endDate, div }).toString();
+    const res = await fetch('/api/searchterms?' + qs);
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error);
+    stData = (json.terms || []).filter(t => t.spend > 0).map(t => ({
+      ...t,
+      roas: t.spend > 0 ? t.revenue / t.spend : 0,
+    }));
+    setTimeout(renderSearchTermsPage, 50);
+  } catch(e) {
+    console.error('Search terms error:', e);
+    document.getElementById('stBody').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:20px;color:#c62828">Error: '+e.message+'</td></tr>';
+  }
+}
+
+function buildSearchTermsData() { /* data now loaded via fetchSearchTermsData */ }
+
+function filteredSTData() {
+  const div    = document.getElementById('stDivFilter').value;
+  const search = document.getElementById('stSearch').value.toLowerCase().trim();
+  return stData.filter(t =>
+    (div === 'all' || t.div === div) &&
+    (!search || t.term.toLowerCase().includes(search))
+  ).filter(t => t.spend > 0);
+}
+
+function renderSearchTermsPage() {
+  try {
+  const debugEl = document.getElementById('stBody');
+  if (!stData.length) {
+    if(debugEl) debugEl.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--muted)">Click Load Search Terms to fetch data.</td></tr>';
+    return;
+  }
+  const rows = filteredSTData();
+  const sorted = applySortToRows(rows, 'stTable');
+  const countEl = document.getElementById('stCount');
+  if(countEl) countEl.textContent = sorted.length + ' search terms';
+
+  // KPI strip
+  let totalSpend=0,totalRev=0,totalClicks=0,totalConv=0,totalImp=0;
+  rows.forEach(r => { totalSpend+=r.spend; totalRev+=r.revenue; totalClicks+=r.clicks; totalConv+=r.conversions; totalImp+=r.impressions; });
+  const roas = totalSpend>0?totalRev/totalSpend:0;
+  const ctr  = totalImp>0?(totalClicks/totalImp)*100:0;
+  document.getElementById('stKpis').innerHTML = [
+    {label:'Total Spend',val:fmtUSD(totalSpend)},
+    {label:'Total Revenue',val:fmtUSD(totalRev)},
+    {label:'ROAS',val:fmtROAS(roas)},
+    {label:'Conversions',val:fmtNum(totalConv)},
+    {label:'Clicks',val:fmtNum(totalClicks)},
+    {label:'Avg CTR',val:fmtPct(ctr)},
+    {label:'Unique Terms',val:rows.length},
+  ].map(m=>'<div class="kpi-card"><div class="kpi-label">'+m.label+'</div><div class="kpi-val" style="font-size:18px">'+m.val+'</div></div>').join('');
+
+  // Charts
+  const top10spend = [...rows].sort((a,b)=>b.spend-a.spend).slice(0,10);
+  const top10conv  = [...rows].sort((a,b)=>b.conversions-a.conversions).slice(0,10);
+  destroyChart('stSpend');
+  destroyChart('stConv');
+  charts.stSpend = new Chart(document.getElementById('stSpendChart'),{type:'bar',data:{labels:top10spend.map(r=>r.term.length>20?r.term.slice(0,18)+'…':r.term),datasets:[{data:top10spend.map(r=>+r.spend.toFixed(2)),backgroundColor:'#1428A099',borderColor:'#1428A0',borderWidth:1.5,borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{color:'#999',font:{size:10},callback:v=>'$'+v},grid:{color:'#f0f0f0'}},x:{ticks:{color:'#666',font:{size:10},maxRotation:35},grid:{display:false}}}}});
+  charts.stConv  = new Chart(document.getElementById('stConvChart'), {type:'bar',data:{labels:top10conv.map(r=>r.term.length>20?r.term.slice(0,18)+'…':r.term),datasets:[{data:top10conv.map(r=>+r.conversions.toFixed(1)),backgroundColor:'#43A04799',borderColor:'#43A047',borderWidth:1.5,borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{color:'#999',font:{size:10}},grid:{color:'#f0f0f0'}},x:{ticks:{color:'#666',font:{size:10},maxRotation:35},grid:{display:false}}}}});
+
+  // Table
+  const adStrengthColor={EXCELLENT:'#2e7d32',GOOD:'#43A047',AVERAGE:'#FF7B00',POOR:'#E53935'};
+  const stBodyEl = document.getElementById('stBody');
+  if(stBodyEl) stBodyEl.innerHTML = sorted.map(r => {
+    const color = DIV_COLORS[r.div]||'#888';
+    return '<tr>' +
+      '<td><strong>'+r.term+'</strong></td>' +
+      '<td><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:'+color+'"></span>'+r.div+'</span></td>' +
+      '<td>'+fmtUSD(r.spend)+'</td>' +
+      '<td>'+fmtNum(r.impressions)+'</td>' +
+      '<td>'+fmtNum(r.clicks)+'</td>' +
+      '<td>'+fmtPct(r.ctr)+'</td>' +
+      '<td>'+fmtNum(r.conversions)+'</td>' +
+      '<td>'+fmtUSD(r.revenue)+'</td>' +
+      '<td>'+(r.roas>0?fmtROAS(r.roas):'—')+'</td>' +
+      '</tr>';
+  }).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px">No data matches filters.</td></tr>';
+  } catch(err) {
+    console.error('renderSearchTermsPage error:', err);
+    const b = document.getElementById('stBody');
+    if(b) b.innerHTML = '<tr><td colspan="9" style="color:#c62828;padding:20px">Render error: '+err.message+'</td></tr>';
+  }
+}
+
+// ─── Assets page ──────────────────────────────────────────────────────────────
+let assData = [];
+
+function buildAssetsData() { /* data now loaded via fetchAssetsData */ }
+
+async function fetchAssetsData() {
+  const startDate = document.getElementById('startDate').value;
+  const endDate   = document.getElementById('endDate').value;
+  const div       = document.getElementById('assDivFilter').value;
+  if (!startDate || !endDate) {
+    document.getElementById('assBody').innerHTML = '<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--muted)">Please select date ranges first then come back.</td></tr>';
+    return;
+  }
+  document.getElementById('assBody').innerHTML = '<tr><td colspan="12" style="text-align:center;padding:20px;color:var(--muted)"><div class="spinner" style="margin:0 auto;border-color:#1428A0;border-top-color:transparent"></div></td></tr>';
+  try {
+    const qs = new URLSearchParams({ startDate, endDate, div }).toString();
+    const res = await fetch('/api/assets?' + qs);
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error);
+    assData = json.assets || [];
+    setTimeout(renderAssetsPage, 50);
+  } catch(e) {
+    console.error('Assets error:', e);
+    document.getElementById('assBody').innerHTML = '<tr><td colspan="12" style="text-align:center;padding:20px;color:#c62828">Error: '+e.message+'</td></tr>';
+  }
+}
+
+function filteredAssData() {
+  const div      = document.getElementById('assDivFilter').value;
+  const strength = document.getElementById('assStrengthFilter').value;
+  const type     = document.getElementById('assTypeFilter') ? document.getElementById('assTypeFilter').value : 'all';
+  return assData.filter(a =>
+    (div === 'all' || a.div === div) &&
+    (strength === 'all' || a.ad_strength === strength) &&
+    (type === 'all' || a.category === type)
+  );
+}
+
+function renderAssetsPage() {
+  if (!assData.length) {
+    document.getElementById('assBody').innerHTML = '<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--muted)">Click Load Assets to fetch data.</td></tr>';
+    return;
+  }
+  const rows = filteredAssData();
+  const sorted = applySortToRows(rows, 'assTable');
+  document.getElementById('assCount').textContent = sorted.length + ' asset groups';
+
+  // Strength summary KPIs
+  const strengthMap = {EXCELLENT:{spend:0,rev:0,conv:0,count:0},GOOD:{spend:0,rev:0,conv:0,count:0},AVERAGE:{spend:0,rev:0,conv:0,count:0},POOR:{spend:0,rev:0,conv:0,count:0}};
+  rows.forEach(a => {
+    const s = strengthMap[a.ad_strength] || (strengthMap[a.ad_strength]={spend:0,rev:0,conv:0,count:0});
+    s.spend+=a.spend; s.rev+=a.revenue; s.conv+=a.conversions; s.count++;
+  });
+  const strengthColors={EXCELLENT:'#2e7d32',GOOD:'#43A047',AVERAGE:'#FF7B00',POOR:'#E53935'};
+  // Summary KPIs: total assets, unique asset groups, by performance
+  const totalAssets = rows.length;
+  const uniqueGroups = [...new Set(rows.map(a=>a.asset_group))].length;
+  const bestCount = rows.filter(a=>a.performance==='BEST').length;
+  const goodCount = rows.filter(a=>a.performance==='GOOD').length;
+  const lowCount  = rows.filter(a=>a.performance==='LOW').length;
+  const totalSpendAss = [...new Set(rows.map(a=>a.asset_group+'||'+a.div))].reduce((sum,key)=>{
+    const [grp,dv]=key.split('||'); const a=rows.find(r=>r.asset_group===grp&&r.div===dv); return sum+(a?.spend||0);
+  },0);
+  document.getElementById('assStrengthKpis').innerHTML = [
+    {label:'Total Assets',val:totalAssets,sub:'across all types'},
+    {label:'Asset Groups',val:uniqueGroups,sub:'Pmax campaigns'},
+    {label:'Group Spend',val:fmtUSD(totalSpendAss),sub:'combined'},
+    {label:'Best Performers',val:bestCount,sub:'assets rated BEST',color:'#2e7d32'},
+    {label:'Good Performers',val:goodCount,sub:'assets rated GOOD',color:'#43A047'},
+    {label:'Low Performers',val:lowCount,sub:'assets rated LOW — review',color:'#E53935'},
+  ].map(m=>`<div class="kpi-card" ${m.color?'style="border-top-color:'+m.color+'"':''}>
+    <div class="kpi-label" ${m.color?'style="color:'+m.color+'"':''}>${m.label}</div>
+    <div class="kpi-val" style="font-size:18px">${m.val}</div>
+    <div class="kpi-prev">${m.sub}</div></div>`).join('');
+
+  // Charts — by asset type and by performance label
+  const typeOrder = ['Headline','Long Headline','Description','Image','Square Image','Portrait Image','Logo','Callout','Sitelink','YouTube Video','Call to Action','Business Name'];
+  const typeCountMap = {};
+  rows.forEach(a => { typeCountMap[a.category] = (typeCountMap[a.category]||0) + 1; });
+  const typeLabels = typeOrder.filter(t => typeCountMap[t]);
+  const typeCounts = typeLabels.map(t => typeCountMap[t]||0);
+  const typeColorsList = typeLabels.map(t => ({'Headline':'#1428A0','Long Headline':'#1428A0aa','Description':'#00B9E4','Image':'#43A047','Square Image':'#43A04799','Portrait Image':'#43A04766','Logo':'#8e24aa','Callout':'#FF7B00','Sitelink':'#f4511e','YouTube Video':'#E53935','Call to Action':'#00897b','Business Name':'#546e7a'}[t]||'#999'));
+
+  const perfOrder = ['BEST','GOOD','LOW','LEARNING','PENDING'];
+  const perfCountMap = {};
+  rows.forEach(a => { if(a.performance && a.performance!=='UNSPECIFIED' && a.performance!=='UNKNOWN') perfCountMap[a.performance] = (perfCountMap[a.performance]||0)+1; });
+  const perfLabels = perfOrder.filter(p => perfCountMap[p]);
+  const perfCounts  = perfLabels.map(p => perfCountMap[p]||0);
+  const perfColorsList = perfLabels.map(p=>({'BEST':'#2e7d32','GOOD':'#43A047','LOW':'#E53935','LEARNING':'#FF7B00','PENDING':'#999'}[p]||'#ccc'));
+
+  destroyChart('assRoas'); destroyChart('assSpend');
+  charts.assRoas = new Chart(document.getElementById('assRoasChart'),{type:'bar',data:{labels:typeLabels,datasets:[{data:typeCounts,backgroundColor:typeColorsList.map(c=>c+'99'),borderColor:typeColorsList,borderWidth:1.5,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.raw+' assets'}}},scales:{y:{ticks:{color:'#999',font:{size:10}},grid:{color:'#f0f0f0'},title:{display:true,text:'Count',color:'#999',font:{size:10}}},x:{ticks:{color:'#666',font:{size:9},maxRotation:30},grid:{display:false}}}}});
+  charts.assSpend = new Chart(document.getElementById('assSpendChart'),{type:'bar',data:{labels:perfLabels,datasets:[{data:perfCounts,backgroundColor:perfColorsList.map(c=>c+'99'),borderColor:perfColorsList,borderWidth:1.5,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.raw+' assets'}}},scales:{y:{ticks:{color:'#999',font:{size:10}},grid:{color:'#f0f0f0'},title:{display:true,text:'Count',color:'#999',font:{size:10}}},x:{ticks:{color:'#666',font:{size:11}},grid:{display:false}}}}});
+
+  // Table
+  // Asset type color coding
+  const typeColors = {
+    'Headline':'#1428A0','Long Headline':'#1428A0','Description':'#00B9E4',
+    'Image':'#43A047','Square Image':'#43A047','Portrait Image':'#43A047',
+    'Logo':'#8e24aa','Landscape Logo':'#8e24aa','Business Logo':'#8e24aa',
+    'YouTube Video':'#E53935','Callout':'#FF7B00','Sitelink':'#f4511e',
+    'Call to Action':'#00897b','Business Name':'#546e7a',
+  };
+  const perfColors = {BEST:'#2e7d32',GOOD:'#43A047',LOW:'#E53935',LEARNING:'#FF7B00',PENDING:'#999',UNSPECIFIED:'#ccc',UNKNOWN:'#ccc'};
+  document.getElementById('assBody').innerHTML = sorted.map(a => {
+    const divColor  = DIV_COLORS[a.div]||'#888';
+    const sc        = strengthColors[a.ad_strength]||'#888';
+    const tc        = typeColors[a.category]||'#555';
+    const pc        = perfColors[a.performance]||'#999';
+    const spend     = a.spend > 0 ? fmtUSD(a.spend) : '—';
+    const roas      = a.revenue > 0 && a.spend > 0 ? fmtROAS(a.revenue/a.spend) : '—';
+    return '<tr>' +
+      '<td><span style="display:inline-block;padding:2px 7px;border-radius:4px;background:'+tc+'22;color:'+tc+';font-weight:600;font-size:11px;white-space:nowrap">'+a.category+'</span></td>' +
+      '<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(a.content||'')+'">'+( a.content ? '<strong>'+a.content+'</strong>' : '<span style="color:var(--muted)">—</span>')+'</td>' +
+      '<td><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:'+divColor+'"></span>'+a.div+'</span></td>' +
+      '<td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--muted)" title="'+a.asset_group+'">'+a.asset_group+'</td>' +
+      '<td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--muted)" title="'+a.campaign+'">'+a.campaign+'</td>' +
+      '<td>'+(a.performance && a.performance !== 'UNSPECIFIED' && a.performance !== 'UNKNOWN' ? '<span style="font-weight:600;color:'+pc+'">'+a.performance+'</span>' : '—')+'</td>' +
+      '<td><span style="font-weight:600;color:'+sc+'">'+a.ad_strength+'</span></td>' +
+      '<td>'+spend+'</td>' +
+      '<td>'+fmtNum(a.impressions||0)+'</td>' +
+      '<td>'+fmtNum(a.clicks||0)+'</td>' +
+      '<td>'+fmtNum(a.conversions||0)+'</td>' +
+      '<td>'+(a.revenue>0?fmtUSD(a.revenue):'—')+'</td>' +
+      '<td>'+roas+'</td>' +
+      '</tr>';
+  }).join('') || '<tr><td colspan="13" style="text-align:center;color:var(--muted);padding:20px">No assets match filters.</td></tr>';
+}
+
+// ─── Apply sortable to all existing tables ────────────────────────────────────
+function initAllSortables() {
+  initSortable('stTable',   renderSearchTermsPage);
+  initSortable('assTable',  renderAssetsPage);
+  // Full table sorting
+  const mainHead = document.getElementById('mainTableHead');
+  if (mainHead) {
+    mainHead.querySelectorAll('th.sortable').forEach(th => {
+      th.addEventListener('click', () => {
+        const col = th.dataset.col;
+        const key = 'mainTable:' + col;
+        const cur = sortState[key] || 'none';
+        const next = cur === 'none' ? 'desc' : cur === 'desc' ? 'asc' : 'none';
+        mainHead.querySelectorAll('th.sortable').forEach(h => { h.classList.remove('sort-asc','sort-desc'); delete sortState['mainTable:'+h.dataset.col]; });
+        sortState[key] = next;
+        if (next !== 'none') th.classList.add(next === 'desc' ? 'sort-desc' : 'sort-asc');
+        if (reportData.length) renderTable();
+      });
+    });
+  }
+  // Campaign table sorting
+  const camHead = document.getElementById('camTableHead');
+  if (camHead) {
+    camHead.querySelectorAll('th.sortable').forEach(th => {
+      th.addEventListener('click', () => {
+        const col = th.dataset.col;
+        const key = 'camTable:' + col;
+        const cur = sortState[key] || 'none';
+        const next = cur === 'none' ? 'desc' : cur === 'desc' ? 'asc' : 'none';
+        camHead.querySelectorAll('th.sortable').forEach(h => { h.classList.remove('sort-asc','sort-desc'); delete sortState['camTable:'+h.dataset.col]; });
+        sortState[key] = next;
+        if (next !== 'none') th.classList.add(next === 'desc' ? 'sort-desc' : 'sort-asc');
+        if (campaignData.length) renderCampaignTable(filteredCampaigns());
+      });
+    });
+  }
+}
+
+// switchPage extended below
+
+// Also make the insights tables sortable
+function makeInsightsSortable() {
+  ['insKeywordTable','insSearchTermTable','insAssetTable','insDeviceTable','insAudienceTable'].forEach(id => {
+    const table = document.getElementById(id);
+    if (!table) return;
+    table.querySelectorAll('th').forEach(th => {
+      th.classList.add('sortable');
+      const col = th.textContent.trim().toLowerCase().replace(/[^a-z]/g,'_');
+      th.dataset.col = col;
+      th.dataset.type = ['spend','revenue','roas','ctr','cvr','clicks','impressions','conversions','avg_cpc','is_','lost'].some(k=>col.includes(k)) ? 'num' : 'str';
+    });
+    initSortable(id, ()=>{});
+  });
+}
+
+// Call after DOM ready
+document.addEventListener('DOMContentLoaded', () => {
+  initAllSortables();
+  makeInsightsSortable();
+});
+
+// ─── Account status ───────────────────────────────────────────────────────────
+async function checkAccounts(){
+  const grid=document.getElementById('accGrid');
+  grid.innerHTML='<div class="empty" style="grid-column:1/-1"><div class="spinner" style="margin:0 auto;border-color:#1428A0;border-top-color:transparent"></div></div>';
+  try{
+    const res=await fetch('/api/accounts');
+    const data=await res.json();
+    grid.innerHTML=Object.entries(data).map(([div,info])=>{
+      const color=DIV_COLORS[div]||'#888';
+      const dotClass=info.status==='ok'?'dot-ok':info.status==='missing'?'dot-miss':'dot-err';
+      const label=info.status==='ok'?'Connected: '+(info.name||info.accounts?.map(a=>a.name).join(', ')):info.status==='missing'?'Not configured':'Error: '+info.error;
+      return'<div class="acc-card"><div class="div-name" style="font-size:13px"><span class="div-dot" style="background:'+color+'"></span>'+div+'</div><div style="font-size:11px;color:var(--muted);margin-top:2px">'+(info.id||'Multiple IDs')+'</div><div class="acc-status"><span class="dot '+dotClass+'"></span><span style="font-size:11px">'+label+'</span></div></div>';
+    }).join('');
+  }catch(e){grid.innerHTML='<div class="empty" style="grid-column:1/-1"><p>Failed: '+e.message+'</p></div>'}
+}
+
+// ─── Export CSV ───────────────────────────────────────────────────────────────
+function exportCSV(){
+  if(!reportData.length){alert('Run a report first.');return}
+  const cols=['Division','Campaign','Spend','Prev Spend','PoP Spend %','Impressions','Clicks','CTR %','Conversions','Revenue','Prev Revenue','PoP Revenue %','ROAS','Prev ROAS','PoP ROAS %','CVR %','Imp Share %','Top IS %'];
+  const rows=filteredRows().map(r=>[r.div,r.cam,r.spend.toFixed(2),(r.prev?.spend||0).toFixed(2),pct(r.spend,r.prev?.spend||0).toFixed(1),r.impressions,r.clicks,r.ctr.toFixed(2),r.conversions,r.revenue.toFixed(2),(r.prev?.revenue||0).toFixed(2),pct(r.revenue,r.prev?.revenue||0).toFixed(1),r.roas.toFixed(2),(r.prev?.roas||0).toFixed(2),pct(r.roas,r.prev?.roas||0).toFixed(1),r.cvr.toFixed(2),r.imp_share.toFixed(1),r.top_imp_share.toFixed(1)]);
+  const csv=[cols,...rows].map(r=>r.join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download='samsung-search-report-'+document.getElementById('startDate').value+'.csv';
+  a.click();
+}
+</script>
+
+<!-- Calendar overlay — lives outside topbar so it never blocks clicks -->
+<div id="calOverlay" style="display:none;pointer-events:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.35)" onclick="if(event.target===this)closePicker()">
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;padding:20px;box-shadow:0 8px 40px rgba(0,0,0,.2);min-width:320px;pointer-events:all">
+    <div style="font-size:13px;font-weight:600;color:var(--blue);margin-bottom:14px" id="calTitle">Select date range</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px" id="calHint">Click a start date</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <button onclick="calNav(-1)" style="border:none;background:var(--gray);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px">‹</button>
+      <span id="calMonthLabel" style="font-size:13px;font-weight:600"></span>
+      <button onclick="calNav(1)" style="border:none;background:var(--gray);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px">›</button>
+    </div>
+    <div id="calGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:14px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closePicker()" style="border:1px solid var(--border);background:transparent;border-radius:7px;padding:6px 14px;cursor:pointer;font-size:12px">Cancel</button>
+      <button id="calApplyBtn" onclick="applyPicker()" style="background:var(--blue);color:#fff;border:none;border-radius:7px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600" disabled>Apply</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
