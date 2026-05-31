@@ -100,6 +100,9 @@ function buildTasks(divFilter) {
   return tasks;
 }
 
+// ─── Health check ─────────────────────────────────────────────────────────────
+app.get("/health", (req, res) => res.json({ status: "ok", ts: new Date().toISOString() }));
+
 // ─── /api/accounts ────────────────────────────────────────────────────────────
 app.get("/api/accounts", async (req, res) => {
   try {
@@ -488,7 +491,6 @@ app.get("/api/assets", async (req, res) => {
           SELECT
             asset_group_asset.field_type,
             asset_group_asset.status,
-            asset_group_asset.primary_status,
             asset.id,
             asset.name,
             asset.type,
@@ -529,8 +531,7 @@ app.get("/api/assets", async (req, res) => {
             SELECT
               asset_group_asset.field_type,
               asset_group_asset.status,
-              asset_group_asset.primary_status,
-              asset.id,
+                asset.id,
               asset.name,
               asset.type,
               asset.text_asset.text,
@@ -611,8 +612,6 @@ app.get("/api/assets", async (req, res) => {
           const assetCtr         = m.ctr ? (m.ctr * 100) : (assetImpressions > 0 ? (assetClicks / assetImpressions) * 100 : 0);
           const assetRoas        = assetSpend > 0 ? assetRevenue / assetSpend : 0;
 
-          // Derive serving status from primary_status
-          const primaryStatus = resolveEnum(r.asset_group_asset?.primary_status, PRIMARY_STATUS_MAP);
 
           return {
             asset_id:   r.asset?.id   || "",
@@ -624,7 +623,6 @@ app.get("/api/assets", async (req, res) => {
             field_type:   fieldType,
             asset_type:   assetType,
             category:     categoryMap[fieldType] || categoryMap[assetType] || fieldType || "Other",
-            primary_status: primaryStatus,
             ad_strength:  resolveEnum(
               perf.ad_strength ?? r.asset_group?.ad_strength,
               AD_STRENGTH_MAP
@@ -752,6 +750,16 @@ app.get("/api/insights", async (req, res) => {
 // ─── Serve frontend ───────────────────────────────────────────────────────────
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "../public/index.html"));
+});
+
+// ─── Global error handler — never let a bad request crash the process ────────
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err.message);
+  res.status(500).json({ error: err.message || "Internal server error" });
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled promise rejection:", reason);
 });
 
 const PORT = process.env.PORT || 3000;
