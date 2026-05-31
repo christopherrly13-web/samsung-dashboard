@@ -2,7 +2,16 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
-const { GoogleAdsApi } = require("google-ads-api");
+
+let GoogleAdsApi;
+try {
+  GoogleAdsApi = require("google-ads-api").GoogleAdsApi;
+  console.log("google-ads-api loaded OK, version:", require("google-ads-api/package.json").version);
+} catch(e) {
+  console.error("FATAL: failed to load google-ads-api:", e.message);
+  // Still boot Express so /health returns something useful
+  GoogleAdsApi = class { constructor() {} Customer() { throw new Error("google-ads-api not loaded: " + e.message); } };
+}
 
 const app = express();
 app.use(cors());
@@ -10,11 +19,18 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "../public")));
 
 // ─── Google Ads Client ────────────────────────────────────────────────────────
-const client = new GoogleAdsApi({
-  client_id: process.env.GOOGLE_ADS_CLIENT_ID,
-  client_secret: process.env.GOOGLE_ADS_CLIENT_SECRET,
-  developer_token: process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
-});
+let client;
+try {
+  client = new GoogleAdsApi({
+    client_id: process.env.GOOGLE_ADS_CLIENT_ID,
+    client_secret: process.env.GOOGLE_ADS_CLIENT_SECRET,
+    developer_token: process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
+  });
+  console.log("GoogleAdsApi client initialized OK");
+} catch(e) {
+  console.error("GoogleAdsApi init failed:", e.message);
+  // Don't crash — let the server start so /health works
+}
 
 // Division → account ID map (supports comma-separated multiple IDs)
 const DIVISIONS = {
