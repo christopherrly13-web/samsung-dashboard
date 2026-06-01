@@ -1671,6 +1671,9 @@ async function fetchAssetsData() {
       ctr:         a.asset_ctr         || 0,
       roas:        a.asset_roas        || 0,
     }));
+    console.log('[Assets] raw count:', json.assets?.length, 'normalised count:', assData.length);
+    if (assData.length > 0) console.log('[Assets] first row sample:', JSON.stringify(assData[0]));
+    else console.warn('[Assets] assData is empty after normalisation — raw first:', JSON.stringify(json.assets?.[0]));
     setTimeout(renderAssetsPage, 50);
   } catch(e) {
     console.error('Assets error:', e);
@@ -1682,14 +1685,25 @@ function filteredAssData() {
   const div      = document.getElementById('assDivFilter').value;
   const strength = document.getElementById('assStrengthFilter').value;
   const type     = document.getElementById('assTypeFilter') ? document.getElementById('assTypeFilter').value : 'all';
-  return assData.filter(a =>
-    (div === 'all' || a.div === div) &&
-    (strength === 'all' || a.ad_strength === strength) &&
-    (type === 'all' || a.category === type)
-  );
+  return assData
+    .filter(a =>
+      (div === 'all' || a.div === div) &&
+      (strength === 'all' || a.ad_strength === strength) &&
+      (type === 'all' || a.category === type)
+    )
+    .map(a => ({
+      ...a,
+      // Always ensure normalised fields exist regardless of API version
+      spend:       a.spend       != null ? a.spend       : (a.asset_spend       ?? a.group_spend       ?? 0),
+      impressions: a.impressions != null ? a.impressions : (a.asset_impressions ?? a.group_impressions ?? 0),
+      clicks:      a.clicks      != null ? a.clicks      : (a.asset_clicks      ?? a.group_clicks      ?? 0),
+      conversions: a.conversions != null ? a.conversions : (a.asset_conversions ?? a.group_conversions ?? 0),
+      revenue:     a.revenue     != null ? a.revenue     : (a.asset_revenue     ?? a.group_revenue     ?? 0),
+    }));
 }
 
 function renderAssetsPage() {
+  try {
   if (!assData.length) {
     document.getElementById('assBody').innerHTML = '<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--muted)">Click Load Assets to fetch data.</td></tr>';
     return;
@@ -1774,8 +1788,13 @@ function renderAssetsPage() {
     const sc        = strengthColors[a.ad_strength]||'#888';
     const tc        = typeColors[a.category]||'#555';
     const pc        = perfColors[a.performance]||'#999';
-    const spend     = a.spend > 0 ? fmtUSD(a.spend) : '—';
-    const roas      = a.revenue > 0 && a.spend > 0 ? fmtROAS(a.revenue/a.spend) : '—';
+    const asp    = a.spend       != null ? a.spend       : (a.asset_spend ?? a.group_spend ?? 0);
+    const arev   = a.revenue     != null ? a.revenue     : (a.asset_revenue ?? a.group_revenue ?? 0);
+    const aimp   = a.impressions != null ? a.impressions : (a.asset_impressions ?? a.group_impressions ?? 0);
+    const aclk   = a.clicks      != null ? a.clicks      : (a.asset_clicks ?? a.group_clicks ?? 0);
+    const aconv  = a.conversions != null ? a.conversions : (a.asset_conversions ?? a.group_conversions ?? 0);
+    const spend  = asp  > 0 ? fmtUSD(asp)  : '—';
+    const roas   = arev > 0 && asp > 0 ? fmtROAS(arev / asp) : '—';
     return '<tr>' +
       '<td><span style="display:inline-block;padding:2px 7px;border-radius:4px;background:'+tc+'22;color:'+tc+';font-weight:600;font-size:11px;white-space:nowrap">'+a.category+'</span></td>' +
       '<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(a.content||'')+'">'+( a.content ? '<strong>'+a.content+'</strong>' : '<span style="color:var(--muted)">—</span>')+'</td>' +
@@ -1785,13 +1804,18 @@ function renderAssetsPage() {
       '<td>'+(a.performance && a.performance !== 'UNSPECIFIED' && a.performance !== 'UNKNOWN' ? '<span style="font-weight:600;color:'+pc+'">'+a.performance+'</span>' : '—')+'</td>' +
       '<td><span style="font-weight:600;color:'+sc+'">'+a.ad_strength+'</span></td>' +
       '<td>'+spend+'</td>' +
-      '<td>'+fmtNum(a.impressions||0)+'</td>' +
-      '<td>'+fmtNum(a.clicks||0)+'</td>' +
-      '<td>'+fmtNum(a.conversions||0)+'</td>' +
-      '<td>'+(a.revenue>0?fmtUSD(a.revenue):'—')+'</td>' +
+      '<td>'+fmtNum(aimp)+'</td>' +
+      '<td>'+fmtNum(aclk)+'</td>' +
+      '<td>'+fmtNum(aconv)+'</td>' +
+      '<td>'+(arev>0?fmtUSD(arev):'—')+'</td>' +
       '<td>'+roas+'</td>' +
       '</tr>';
   }).join('') || '<tr><td colspan="13" style="text-align:center;color:var(--muted);padding:20px">No assets match filters.</td></tr>';
+  } catch(err) {
+    console.error('renderAssetsPage error:', err);
+    document.getElementById('assBody').innerHTML =
+      '<tr><td colspan="13" style="text-align:center;padding:20px;color:#c62828">Render error: ' + err.message + '</td></tr>';
+  }
 }
 
 // ─── Apply sortable to all existing tables ────────────────────────────────────
