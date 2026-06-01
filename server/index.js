@@ -441,53 +441,33 @@ app.get("/api/searchterms", async (req, res) => {
 });
 
 // ─── /api/assets ──────────────────────────────────────────────────────────────
-// Two-step: (1) fetch asset groups WITH spend in date range,
-// (2) fetch individual assets and filter to those active groups only.
-// This fixes MX where PMax asset groups don't always surface cost_micros
-// at the group level — we use campaign-level spend as a fallback signal.
+// Strategy: 3 attempts per account, each simpler than the last.
+//   1. asset_group_asset WITH date-segmented metrics (gives per-asset spend variance)
+//   2. asset_group_asset WITHOUT date filter (just asset inventory)
+//   3. asset_group only (group-level names + strength, no individual assets)
+// Whichever returns rows first wins. Group-level spend always comes from
+// a separate asset_group query so we always have performance context.
 app.get("/api/assets", async (req, res) => {
   try {
     const { startDate, endDate, div } = req.query;
     if (!startDate || !endDate) return res.status(400).json({ error: "Missing dates" });
 
     const AD_STRENGTH_MAP = {0:"UNSPECIFIED",1:"UNKNOWN",2:"PENDING",3:"NO_ADS",4:"POOR",5:"AVERAGE",6:"GOOD",7:"EXCELLENT"};
-
-    const categoryMap = {
-      HEADLINE:                 "Headline",
-      DESCRIPTION:              "Description",
-      MARKETING_IMAGE:          "Image",
-      SQUARE_MARKETING_IMAGE:   "Image",
-      PORTRAIT_MARKETING_IMAGE: "Image",
-      LOGO:                     "Logo",
-      SQUARE_LOGO:              "Logo",
-      YOUTUBE_VIDEO:            "Video",
-      CALL_TO_ACTION:           "Call to Action",
-      BUSINESS_NAME:            "Business Name",
-      BUSINESS_LOGO:            "Business Logo",
-      CALLOUT:                  "Callout",
-      SITELINK:                 "Sitelink",
-      STRUCTURED_SNIPPET:       "Structured Snippet",
-      PROMOTION:                "Promotion",
-      PRICE:                    "Price",
-      LEAD_FORM:                "Lead Form",
-      IMAGE:                    "Image",
-      TEXT:                     "Text",
-    };
+    const FIELD_TYPE_MAP  = {0:"UNSPECIFIED",1:"UNKNOWN",2:"HEADLINE",3:"DESCRIPTION",4:"MARKETING_IMAGE",5:"SQUARE_MARKETING_IMAGE",6:"LOGO",7:"YOUTUBE_VIDEO",8:"CALL_TO_ACTION",9:"BUSINESS_NAME",10:"BUSINESS_LOGO",11:"CALLOUT",12:"STRUCTURED_SNIPPET",13:"PROMOTION",14:"PRICE",15:"SQUARE_LOGO",16:"LEAD_FORM",17:"IMAGE",18:"PORTRAIT_MARKETING_IMAGE",19:"SITELINK"};
+    const ASSET_TYPE_MAP  = {0:"UNSPECIFIED",1:"UNKNOWN",2:"YOUTUBE_VIDEO",3:"MEDIA_BUNDLE",4:"IMAGE",5:"TEXT",6:"LEAD_FORM",7:"BOOK_ON_GOOGLE",8:"PROMOTION",9:"CALLOUT",10:"STRUCTURED_SNIPPET",11:"SITELINK",12:"PAGE_FEED",13:"DYNAMIC_EDUCATION",14:"MOBILE_APP",15:"HOTEL_CALLOUT",16:"CALL",17:"PRICE",18:"CALL_TO_ACTION",19:"DYNAMIC_REAL_ESTATE",20:"DYNAMIC_CUSTOM",21:"DYNAMIC_HOTELS_AND_RENTALS",22:"DYNAMIC_FLIGHTS",23:"DISCOVERY_CAROUSEL_CARD",24:"DYNAMIC_TRAVEL",25:"DYNAMIC_LOCAL",26:"DYNAMIC_JOBS",27:"LOCATION",28:"HOTEL_PROPERTY"};
+    const CATEGORY_MAP    = {HEADLINE:"Headline",DESCRIPTION:"Description",MARKETING_IMAGE:"Image",SQUARE_MARKETING_IMAGE:"Image",PORTRAIT_MARKETING_IMAGE:"Image",LOGO:"Logo",SQUARE_LOGO:"Logo",YOUTUBE_VIDEO:"Video",CALL_TO_ACTION:"Call to Action",BUSINESS_NAME:"Business Name",BUSINESS_LOGO:"Business Logo",CALLOUT:"Callout",SITELINK:"Sitelink",STRUCTURED_SNIPPET:"Structured Snippet",PROMOTION:"Promotion",PRICE:"Price",LEAD_FORM:"Lead Form",IMAGE:"Image",TEXT:"Text"};
 
     const tasks = buildTasks(div);
+    console.log(`[assets] starting for div=${div}, tasks=${tasks.length}`);
 
     const results = await Promise.all(tasks.map(async ({ divName, accountId }) => {
       const cust = getCustomer(accountId);
 
-      // ── Step 1: Get asset groups that had spend in the date range ──────────
-      // Paginate to handle accounts with many asset groups (MX has 100+)
-      let perfRows = [];
-      let offset = 0;
-      const PAGE = 500;
-      while (true) {
-        const page = await safeQuery(cust, `
+      // ── A: Get group-level spend (always, as the perf baseline) ─────────────
+      let groupPerf = {};
+      try {
+        const gRows = await cust.query(`
           SELECT
-            asset_group.resource_name,
             asset_group.name,
             asset_group.ad_strength,
             campaign.name,
@@ -499,90 +479,33 @@ app.get("/api/assets", async (req, res) => {
           FROM asset_group
           WHERE segments.date BETWEEN '${startDate}' AND '${endDate}'
             AND asset_group.status = 'ENABLED'
-            AND metrics.impressions > 0
-          ORDER BY metrics.cost_micros DESC
-          LIMIT ${PAGE} OFFSET ${offset}
-        `, `${divName}/assetgroups-p${offset}`);
-        perfRows = perfRows.concat(page);
-        if (page.length < PAGE) break;
-        offset += PAGE;
-        if (offset > 2000) break; // safety cap
-      }
-
-      // ── Step 1b: If no asset groups had impressions (can happen for PMax
-      //    in some MCC setups), fall back to ANY enabled asset groups ─────────
-      let activeGroupNames = new Set(perfRows.map(r => r.asset_group?.name).filter(Boolean));
-      const perfByName = {};
-      perfRows.forEach(r => {
-        const name = r.asset_group?.name;
-        if (!name) return;
-        perfByName[name] = {
-          ad_strength: r.asset_group?.ad_strength,
-          campaign:    r.campaign?.name,
-          spend:       (r.metrics?.cost_micros || 0) / 1e6,
-          impressions: r.metrics?.impressions || 0,
-          clicks:      r.metrics?.clicks || 0,
-          conversions: r.metrics?.conversions || 0,
-          revenue:     r.metrics?.conversions_value || 0,
-        };
-      });
-
-      // If no active groups found at asset_group level, try campaign-level
-      // to check if MX account has any spend at all in this period
-      if (activeGroupNames.size === 0) {
-        const campRows = await safeQuery(cust, `
-          SELECT campaign.name, metrics.cost_micros, metrics.impressions
-          FROM campaign
-          WHERE segments.date BETWEEN '${startDate}' AND '${endDate}'
-            AND campaign.status = 'ENABLED'
-            AND metrics.impressions > 0
-          ORDER BY metrics.cost_micros DESC LIMIT 10
-        `, `${divName}/camp-check`);
-
-        if (campRows.length === 0) {
-          // Account has zero impressions in this period — return empty
-          return [];
-        }
-
-        // Account has spend but asset_group-level query returned nothing.
-        // This happens in some MCC/PMax configs. Fetch all enabled asset
-        // groups (no spend filter) so at least assets are shown.
-        const allGroupRows = await safeQuery(cust, `
-          SELECT asset_group.name, asset_group.ad_strength, campaign.name
-          FROM asset_group
-          WHERE asset_group.status = 'ENABLED'
-          LIMIT 500
-        `, `${divName}/assetgroups-fallback`);
-
-        allGroupRows.forEach(r => {
+          ORDER BY metrics.impressions DESC
+          LIMIT 1000
+        `);
+        gRows.forEach(r => {
           const name = r.asset_group?.name;
           if (!name) return;
-          activeGroupNames.add(name);
-          if (!perfByName[name]) {
-            perfByName[name] = {
-              ad_strength: r.asset_group?.ad_strength,
-              campaign:    r.campaign?.name,
-              spend:       0,
-              impressions: 0,
-              clicks:      0,
-              conversions: 0,
-              revenue:     0,
+          if (!groupPerf[name] || (r.metrics?.impressions||0) > (groupPerf[name].impressions||0)) {
+            groupPerf[name] = {
+              ad_strength:  r.asset_group?.ad_strength,
+              campaign:     r.campaign?.name || "",
+              spend:        (r.metrics?.cost_micros || 0) / 1e6,
+              impressions:  r.metrics?.impressions  || 0,
+              clicks:       r.metrics?.clicks       || 0,
+              conversions:  r.metrics?.conversions  || 0,
+              revenue:      r.metrics?.conversions_value || 0,
             };
           }
         });
+        console.log(`[assets] ${divName}/${accountId}: group perf rows=${gRows.length}, groups=${Object.keys(groupPerf).length}`);
+      } catch(e) {
+        console.warn(`[assets] ${divName} group query failed:`, e.message?.slice(0,200));
       }
 
-      if (activeGroupNames.size === 0) return [];
-
-      // ── Step 2: Fetch individual assets WITH metrics per asset ─────────────
-      // asset_group_asset now supports quantitative metrics (clicks, impressions,
-      // conversions) segmented by date — this replaced the removed performance_label.
-      // Note: metrics here are per-asset within the group, giving true variance.
+      // ── B: Try asset_group_asset WITH date metrics first ────────────────────
       let assetRows = [];
-      let assetOffset = 0;
-      const ASSET_PAGE = 1000;
-      while (true) {
-        const page = await safeQuery(cust, `
+      try {
+        const page = await cust.query(`
           SELECT
             asset_group_asset.field_type,
             asset_group_asset.status,
@@ -594,7 +517,6 @@ app.get("/api/assets", async (req, res) => {
             asset.image_asset.full_size.height_pixels,
             asset.youtube_video_asset.youtube_video_title,
             asset.sitelink_asset.link_text,
-            asset.sitelink_asset.description1,
             asset.callout_asset.callout_text,
             asset_group.name,
             asset_group.ad_strength,
@@ -603,30 +525,27 @@ app.get("/api/assets", async (req, res) => {
             metrics.clicks,
             metrics.conversions,
             metrics.conversions_value,
-            metrics.cost_micros,
-            metrics.ctr
+            metrics.cost_micros
           FROM asset_group_asset
           WHERE asset_group_asset.status = 'ENABLED'
             AND segments.date BETWEEN '${startDate}' AND '${endDate}'
           ORDER BY metrics.impressions DESC
-          LIMIT ${ASSET_PAGE} OFFSET ${assetOffset}
-        `, `${divName}/assets-p${assetOffset}`);
-        assetRows = assetRows.concat(page);
-        if (page.length < ASSET_PAGE) break;
-        assetOffset += ASSET_PAGE;
-        if (assetOffset > 10000) break;
+          LIMIT 5000
+        `);
+        assetRows = page;
+        console.log(`[assets] ${divName} date-segmented asset rows: ${assetRows.length}`);
+      } catch(e) {
+        console.warn(`[assets] ${divName} date-segmented query failed:`, e.message?.slice(0,200));
       }
 
-      // If the metrics query returned nothing (some API versions don't support
-      // date segmentation on asset_group_asset), fall back to no-metrics query
+      // ── C: Fallback — no date filter if date-segmented returned nothing ──────
       if (assetRows.length === 0) {
-        let fallbackOffset = 0;
-        while (true) {
-          const page = await safeQuery(cust, `
+        try {
+          const page = await cust.query(`
             SELECT
               asset_group_asset.field_type,
               asset_group_asset.status,
-                asset.id,
+              asset.id,
               asset.name,
               asset.type,
               asset.text_asset.text,
@@ -634,7 +553,6 @@ app.get("/api/assets", async (req, res) => {
               asset.image_asset.full_size.height_pixels,
               asset.youtube_video_asset.youtube_video_title,
               asset.sitelink_asset.link_text,
-              asset.sitelink_asset.description1,
               asset.callout_asset.callout_text,
               asset_group.name,
               asset_group.ad_strength,
@@ -642,105 +560,87 @@ app.get("/api/assets", async (req, res) => {
             FROM asset_group_asset
             WHERE asset_group_asset.status = 'ENABLED'
             ORDER BY asset_group.name
-            LIMIT ${ASSET_PAGE} OFFSET ${fallbackOffset}
-          `, `${divName}/assets-fallback-p${fallbackOffset}`);
-          assetRows = assetRows.concat(page);
-          if (page.length < ASSET_PAGE) break;
-          fallbackOffset += ASSET_PAGE;
-          if (fallbackOffset > 10000) break;
+            LIMIT 5000
+          `);
+          assetRows = page;
+          console.log(`[assets] ${divName} no-date fallback asset rows: ${assetRows.length}`);
+        } catch(e) {
+          console.warn(`[assets] ${divName} no-date fallback failed:`, e.message?.slice(0,200));
         }
       }
 
-      // ── Step 3: Filter to active groups and build output rows ─────────────
-      const PRIMARY_STATUS_MAP = {
-        0:"UNSPECIFIED",1:"UNKNOWN",2:"ELIGIBLE",3:"PAUSED",4:"REMOVED",
-        5:"PENDING",6:"LIMITED",7:"LEARNING",8:"NOT_ELIGIBLE",
-      };
+      // ── D: If still nothing, synthesize rows from group perf data ────────────
+      if (assetRows.length === 0 && Object.keys(groupPerf).length > 0) {
+        console.log(`[assets] ${divName} synthesizing from group perf only`);
+        return Object.entries(groupPerf).map(([name, p]) => ({
+          asset_id: "", asset_name: "", content: "(group-level only)",
+          asset_group: name, campaign: p.campaign, div: divName,
+          field_type: "UNSPECIFIED", asset_type: "UNSPECIFIED", category: "Group",
+          ad_strength: resolveEnum(p.ad_strength, AD_STRENGTH_MAP),
+          asset_spend: 0, asset_impressions: 0, asset_clicks: 0, asset_conversions: 0, asset_revenue: 0, asset_ctr: 0, asset_roas: 0,
+          group_spend: p.spend, group_impressions: p.impressions, group_clicks: p.clicks, group_conversions: p.conversions, group_revenue: p.revenue,
+        }));
+      }
 
-      return assetRows
-        .filter(r => activeGroupNames.has(r.asset_group?.name))
-        .map(r => {
-          const fieldType = resolveEnum(r.asset_group_asset?.field_type, {
-            0:"UNSPECIFIED",1:"UNKNOWN",2:"HEADLINE",3:"DESCRIPTION",
-            4:"MARKETING_IMAGE",5:"SQUARE_MARKETING_IMAGE",6:"LOGO",
-            7:"YOUTUBE_VIDEO",8:"CALL_TO_ACTION",9:"BUSINESS_NAME",
-            10:"BUSINESS_LOGO",11:"CALLOUT",12:"STRUCTURED_SNIPPET",
-            13:"PROMOTION",14:"PRICE",15:"SQUARE_LOGO",16:"LEAD_FORM",
-            17:"IMAGE",18:"PORTRAIT_MARKETING_IMAGE",19:"SITELINK",
-            20:"MOBILE_APP",
-          });
+      if (assetRows.length === 0) {
+        console.log(`[assets] ${divName} nothing returned at all`);
+        return [];
+      }
 
-          const assetType = resolveEnum(r.asset?.type, {
-            0:"UNSPECIFIED",1:"UNKNOWN",2:"YOUTUBE_VIDEO",3:"MEDIA_BUNDLE",
-            4:"IMAGE",5:"TEXT",6:"LEAD_FORM",7:"BOOK_ON_GOOGLE",
-            8:"PROMOTION",9:"CALLOUT",10:"STRUCTURED_SNIPPET",11:"SITELINK",
-            12:"PAGE_FEED",13:"DYNAMIC_EDUCATION",14:"MOBILE_APP",
-            15:"HOTEL_CALLOUT",16:"CALL",17:"PRICE",18:"CALL_TO_ACTION",
-            19:"DYNAMIC_REAL_ESTATE",20:"DYNAMIC_CUSTOM",21:"DYNAMIC_HOTELS_AND_RENTALS",
-            22:"DYNAMIC_FLIGHTS",23:"DISCOVERY_CAROUSEL_CARD",24:"DYNAMIC_TRAVEL",
-            25:"DYNAMIC_LOCAL",26:"DYNAMIC_JOBS",27:"LOCATION",28:"HOTEL_PROPERTY",
-            29:"DEMAND_GEN_CAROUSEL_CARD",30:"BUSINESS_MESSAGE",
-          });
+      // ── E: Map asset rows → output objects ───────────────────────────────────
+      return assetRows.map(r => {
+        const fieldType = resolveEnum(r.asset_group_asset?.field_type, FIELD_TYPE_MAP);
+        const assetType = resolveEnum(r.asset?.type, ASSET_TYPE_MAP);
 
-          // Derive human-readable content from the asset
-          let content = "";
-          if (r.asset?.text_asset?.text)                            content = r.asset.text_asset.text;
-          else if (r.asset?.youtube_video_asset?.youtube_video_title) content = r.asset.youtube_video_asset.youtube_video_title;
-          else if (r.asset?.sitelink_asset?.link_text)              content = r.asset.sitelink_asset.link_text;
-          else if (r.asset?.callout_asset?.callout_text)            content = r.asset.callout_asset.callout_text;
-          else if (r.asset?.image_asset?.full_size?.width_pixels) {
-            const w = r.asset.image_asset.full_size.width_pixels;
-            const h = r.asset.image_asset.full_size.height_pixels;
-            content = `${w}x${h}`;
-          }
+        let content = "";
+        if (r.asset?.text_asset?.text)                             content = r.asset.text_asset.text;
+        else if (r.asset?.youtube_video_asset?.youtube_video_title) content = r.asset.youtube_video_asset.youtube_video_title;
+        else if (r.asset?.sitelink_asset?.link_text)               content = r.asset.sitelink_asset.link_text;
+        else if (r.asset?.callout_asset?.callout_text)             content = r.asset.callout_asset.callout_text;
+        else if (r.asset?.image_asset?.full_size?.width_pixels)    content = `${r.asset.image_asset.full_size.width_pixels}x${r.asset.image_asset.full_size.height_pixels}`;
 
-          const grpName = r.asset_group?.name || "";
-          const perf    = perfByName[grpName] || {};
-          const m       = r.metrics || {};
+        const grpName = r.asset_group?.name || "";
+        const grp     = groupPerf[grpName] || {};
+        const m       = r.metrics || {};
 
-          // Per-asset metrics (from asset_group_asset with date segmentation)
-          const assetImpressions = m.impressions || 0;
-          const assetClicks      = m.clicks || 0;
-          const assetConversions = m.conversions || 0;
-          const assetRevenue     = m.conversions_value || 0;
-          const assetSpend       = (m.cost_micros || 0) / 1e6;
-          const assetCtr         = m.ctr ? (m.ctr * 100) : (assetImpressions > 0 ? (assetClicks / assetImpressions) * 100 : 0);
-          const assetRoas        = assetSpend > 0 ? assetRevenue / assetSpend : 0;
+        const assetSpend       = (m.cost_micros || 0) / 1e6;
+        const assetImpressions = m.impressions  || 0;
+        const assetClicks      = m.clicks       || 0;
+        const assetConversions = m.conversions  || 0;
+        const assetRevenue     = m.conversions_value || 0;
 
-
-          return {
-            asset_id:   r.asset?.id   || "",
-            asset_name: r.asset?.name || "",
-            content,
-            asset_group:  grpName,
-            campaign:     perf.campaign || r.campaign?.name || "",
-            div:          divName,
-            field_type:   fieldType,
-            asset_type:   assetType,
-            category:     categoryMap[fieldType] || categoryMap[assetType] || fieldType || "Other",
-            ad_strength:  resolveEnum(
-              perf.ad_strength ?? r.asset_group?.ad_strength,
-              AD_STRENGTH_MAP
-            ),
-            // Per-asset metrics (true variance between assets in same group)
-            asset_impressions: assetImpressions,
-            asset_clicks:      assetClicks,
-            asset_conversions: assetConversions,
-            asset_revenue:     assetRevenue,
-            asset_spend:       assetSpend,
-            asset_ctr:         assetCtr,
-            asset_roas:        assetRoas,
-            // Group-level metrics (same for all assets in the group)
-            group_spend:       perf.spend       || 0,
-            group_impressions: perf.impressions || 0,
-            group_clicks:      perf.clicks      || 0,
-            group_conversions: perf.conversions || 0,
-            group_revenue:     perf.revenue     || 0,
-          };
-        });
+        return {
+          asset_id:    r.asset?.id   || "",
+          asset_name:  r.asset?.name || "",
+          content,
+          asset_group: grpName,
+          campaign:    grp.campaign || r.campaign?.name || "",
+          div:         divName,
+          field_type:  fieldType,
+          asset_type:  assetType,
+          category:    CATEGORY_MAP[fieldType] || CATEGORY_MAP[assetType] || fieldType || "Other",
+          ad_strength: resolveEnum(grp.ad_strength ?? r.asset_group?.ad_strength, AD_STRENGTH_MAP),
+          // Per-asset metrics
+          asset_spend,
+          asset_impressions,
+          asset_clicks,
+          asset_conversions,
+          asset_revenue,
+          asset_ctr:  assetImpressions > 0 ? (assetClicks / assetImpressions) * 100 : 0,
+          asset_roas: assetSpend > 0 ? assetRevenue / assetSpend : 0,
+          // Group-level metrics
+          group_spend:       grp.spend       || 0,
+          group_impressions: grp.impressions || 0,
+          group_clicks:      grp.clicks      || 0,
+          group_conversions: grp.conversions || 0,
+          group_revenue:     grp.revenue     || 0,
+        };
+      });
     }));
 
-    res.json({ assets: results.flat(), generatedAt: new Date().toISOString() });
+    const assets = results.flat();
+    console.log(`[assets] total assets returned: ${assets.length}`);
+    res.json({ assets, generatedAt: new Date().toISOString() });
   } catch(err) {
     console.error("Assets error:", err.message);
     res.status(500).json({ error: err.message });
