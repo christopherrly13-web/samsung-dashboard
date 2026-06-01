@@ -1535,10 +1535,35 @@ async function fetchSearchTermsData() {
     const res = await fetch('/api/searchterms?' + qs);
     const json = await res.json();
     if (!res.ok) throw new Error(json.error);
-    stData = (json.terms || []).filter(t => t.spend > 0).map(t => ({
-      ...t,
-      roas: t.spend > 0 ? t.revenue / t.spend : 0,
-    }));
+    // Consolidate: same term + same division → sum metrics, list campaign count
+    const stMap = {};
+    (json.terms || []).forEach(t => {
+      const key = t.div + '||' + (t.term || '').toLowerCase().trim();
+      if (!stMap[key]) {
+        stMap[key] = {
+          ...t,
+          spend: 0, impressions: 0, clicks: 0, conversions: 0, revenue: 0,
+          _campaigns: new Set(),
+        };
+      }
+      stMap[key].spend       += t.spend       || 0;
+      stMap[key].impressions += t.impressions || 0;
+      stMap[key].clicks      += t.clicks      || 0;
+      stMap[key].conversions += t.conversions || 0;
+      stMap[key].revenue     += t.revenue     || 0;
+      if (t.campaign) stMap[key]._campaigns.add(t.campaign);
+    });
+    stData = Object.values(stMap)
+      .filter(t => t.spend > 0 || t.impressions > 0)
+      .map(t => ({
+        ...t,
+        roas:     t.spend > 0 ? t.revenue / t.spend : 0,
+        ctr:      t.impressions > 0 ? (t.clicks / t.impressions) * 100 : 0,
+        campaign: t._campaigns.size > 1
+          ? t._campaigns.size + ' campaigns'
+          : ([...t._campaigns][0] || ''),
+        _campaigns: undefined,
+      }));
     setTimeout(renderSearchTermsPage, 50);
   } catch(e) {
     console.error('Search terms error:', e);
@@ -1635,7 +1660,17 @@ async function fetchAssetsData() {
     const res = await fetch('/api/assets?' + qs);
     const json = await res.json();
     if (!res.ok) throw new Error(json.error);
-    assData = json.assets || [];
+    // Normalize field names — API now returns asset_spend/group_spend
+    assData = (json.assets || []).map(a => ({
+      ...a,
+      spend:       a.asset_spend       != null ? a.asset_spend       : (a.group_spend       || 0),
+      impressions: a.asset_impressions != null ? a.asset_impressions : (a.group_impressions || 0),
+      clicks:      a.asset_clicks      != null ? a.asset_clicks      : (a.group_clicks      || 0),
+      conversions: a.asset_conversions != null ? a.asset_conversions : (a.group_conversions || 0),
+      revenue:     a.asset_revenue     != null ? a.asset_revenue     : (a.group_revenue     || 0),
+      ctr:         a.asset_ctr         || 0,
+      roas:        a.asset_roas        || 0,
+    }));
     setTimeout(renderAssetsPage, 50);
   } catch(e) {
     console.error('Assets error:', e);
@@ -1665,9 +1700,18 @@ function renderAssetsPage() {
 
   // Strength summary KPIs
   const strengthMap = {EXCELLENT:{spend:0,rev:0,conv:0,count:0},GOOD:{spend:0,rev:0,conv:0,count:0},AVERAGE:{spend:0,rev:0,conv:0,count:0},POOR:{spend:0,rev:0,conv:0,count:0}};
+  // Deduplicate by asset_group for spend (asset rows share group metrics)
+  const seenForStrength = new Set();
   rows.forEach(a => {
     const s = strengthMap[a.ad_strength] || (strengthMap[a.ad_strength]={spend:0,rev:0,conv:0,count:0});
-    s.spend+=a.spend; s.rev+=a.revenue; s.conv+=a.conversions; s.count++;
+    s.count++; // count individual assets
+    const gkey = a.div + '||' + a.asset_group;
+    if (!seenForStrength.has(gkey)) {
+      seenForStrength.add(gkey);
+      s.spend += a.group_spend || a.spend || 0;
+      s.rev   += a.group_revenue || a.revenue || 0;
+      s.conv  += a.group_conversions || a.conversions || 0;
+    }
   });
   const strengthColors={EXCELLENT:'#2e7d32',GOOD:'#43A047',AVERAGE:'#FF7B00',POOR:'#E53935'};
   // Summary KPIs: total assets, unique asset groups, by performance
@@ -1676,9 +1720,14 @@ function renderAssetsPage() {
   const bestCount = rows.filter(a=>a.performance==='BEST').length;
   const goodCount = rows.filter(a=>a.performance==='GOOD').length;
   const lowCount  = rows.filter(a=>a.performance==='LOW').length;
-  const totalSpendAss = [...new Set(rows.map(a=>a.asset_group+'||'+a.div))].reduce((sum,key)=>{
-    const [grp,dv]=key.split('||'); const a=rows.find(r=>r.asset_group===grp&&r.div===dv); return sum+(a?.spend||0);
-  },0);
+  // Sum group_spend once per unique asset_group+div (avoid double-counting per-asset spend)
+  const seenGroups = new Set();
+  const totalSpendAss = rows.reduce((sum, a) => {
+    const key = a.div + '||' + a.asset_group;
+    if (seenGroups.has(key)) return sum;
+    seenGroups.add(key);
+    return sum + (a.group_spend || a.spend || 0);
+  }, 0);
   document.getElementById('assStrengthKpis').innerHTML = [
     {label:'Total Assets',val:totalAssets,sub:'across all types'},
     {label:'Asset Groups',val:uniqueGroups,sub:'Pmax campaigns'},
