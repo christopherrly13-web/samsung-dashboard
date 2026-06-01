@@ -1090,7 +1090,6 @@ async function generateInsights() {
 }
 
 function renderInsightsKPIs(data) {
-  try {
   let spend=0,rev=0,clicks=0,imp=0,conv=0,pSpend=0,pRev=0,pClicks=0,pImp=0,pConv=0;
   Object.values(data.divisions).forEach(d => {
     (d.campaigns||[]).filter(c=>c).forEach(c => { spend+=(c.spend||0); rev+=(c.revenue||0); clicks+=(c.clicks||0); imp+=(c.impressions||0); conv+=(c.conversions||0); });
@@ -1208,7 +1207,6 @@ function renderInsightsTables(data) {
   document.getElementById('insAudienceTable').innerHTML = topAudiences.map(a =>
     '<tr><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">'+a.user_list+'</td><td>'+a.campaign+'</td><td>'+fmtUSD(a.spend)+'</td><td>'+fmtNum(a.clicks)+'</td><td>'+fmtNum(a.conversions)+'</td><td>'+fmtROAS(a.roas)+'</td><td>'+fmtPct(a.ctr)+'</td></tr>'
   ).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--muted)">No audience data available</td></tr>';
-  } catch(err) { console.error('renderInsightsTables error:', err); }
 }
 
 async function generateAIReport(data, startDate, endDate, prevStart, prevEnd) {
@@ -1705,7 +1703,6 @@ function filteredAssData() {
 }
 
 function renderAssetsPage() {
-  try {
   if (!assData.length) {
     document.getElementById('assBody').innerHTML = '<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--muted)">Click Load Assets to fetch data.</td></tr>';
     return;
@@ -1813,11 +1810,6 @@ function renderAssetsPage() {
       '<td>'+roas+'</td>' +
       '</tr>';
   }).join('') || '<tr><td colspan="13" style="text-align:center;color:var(--muted);padding:20px">No assets match filters.</td></tr>';
-  } catch(err) {
-    console.error('renderAssetsPage error:', err);
-    document.getElementById('assBody').innerHTML =
-      '<tr><td colspan="13" style="text-align:center;padding:20px;color:#c62828">Render error: ' + err.message + '</td></tr>';
-  }
 }
 
 // ─── Apply sortable to all existing tables ────────────────────────────────────
@@ -1877,9 +1869,26 @@ function makeInsightsSortable() {
 
 // Call after DOM ready
 document.addEventListener('DOMContentLoaded', () => {
-  initAllSortables();
-  makeInsightsSortable();
+  // Set default date ranges: last 30 days current, prior 30 days previous
+  try {
+    const today = new Date();
+    const fmt = d => d.toISOString().slice(0,10);
+    const d = n => { const x = new Date(today); x.setDate(x.getDate() - n); return x; };
+    const curEnd   = fmt(d(1));
+    const curStart = fmt(d(30));
+    const prevEnd  = fmt(d(31));
+    const prevStart= fmt(d(60));
+    setPickerValues('current',  curStart,  curEnd);
+    setPickerValues('previous', prevStart, prevEnd);
+  } catch(e) { console.warn('Date init error:', e.message); }
+
+  try { initAllSortables(); }    catch(e) { console.warn('initAllSortables error:', e.message); }
+  try { makeInsightsSortable(); } catch(e) { console.warn('makeInsightsSortable error:', e.message); }
 });
+
+window.onerror = (msg, src, line, col, err) => {
+  console.error('Global JS error:', msg, 'at line', line, col, err);
+};
 
 // ─── Account status ───────────────────────────────────────────────────────────
 async function checkAccounts(){
