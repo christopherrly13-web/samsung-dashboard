@@ -1121,8 +1121,8 @@ function renderInsightsTables(data) {
     allCampaigns.push(...d.campaigns);
     allSearchTerms.push(...d.searchTerms);
     allKeywords.push(...d.keywords);
-    allAssetGroups.push(...d.assetGroups);
-    allAudiences.push(...d.audiences);
+    allAssetGroups.push(...(d.assetGroups || []).filter(a => a && a.spend != null));
+    allAudiences.push(...(d.audiences || []).filter(a => a && a.spend != null));
     d.devices.forEach(dev => {
       if (!allDevices[dev.device]) allDevices[dev.device]={device:dev.device,spend:0,impressions:0,clicks:0,conversions:0,revenue:0};
       allDevices[dev.device].spend+=dev.spend; allDevices[dev.device].impressions+=dev.impressions;
@@ -1196,14 +1196,14 @@ function renderInsightsTables(data) {
   ).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--muted)">No search term data available</td></tr>';
 
   // Asset groups table
-  const topAssets = allAssetGroups.sort((a,b)=>b.spend-a.spend).slice(0,20);
+  const topAssets = allAssetGroups.filter(a => a && a.spend != null).sort((a,b)=>(b.spend||0)-(a.spend||0)).slice(0,20);
   const adStrengthColor = {EXCELLENT:'#2e7d32',GOOD:'#43A047',AVERAGE:'#FF7B00',POOR:'#E53935',PENDING:'#6b7280',NO_ADS:'#E53935'};
   document.getElementById('insAssetTable').innerHTML = topAssets.map(a =>
     '<tr><td><strong>'+a.name+'</strong></td><td>'+a.campaign+'</td><td><span style="color:'+(adStrengthColor[a.ad_strength]||'#666')+';font-weight:600">'+a.ad_strength+'</span></td><td>'+fmtUSD(a.spend)+'</td><td>'+fmtNum(a.conversions)+'</td><td>'+fmtROAS(a.roas)+'</td></tr>'
   ).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--muted)">No Pmax asset group data available</td></tr>';
 
   // Audiences table
-  const topAudiences = allAudiences.sort((a,b)=>b.spend-a.spend).slice(0,20);
+  const topAudiences = allAudiences.filter(a => a && a.spend != null).sort((a,b)=>(b.spend||0)-(a.spend||0)).slice(0,20);
   document.getElementById('insAudienceTable').innerHTML = topAudiences.map(a =>
     '<tr><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">'+a.user_list+'</td><td>'+a.campaign+'</td><td>'+fmtUSD(a.spend)+'</td><td>'+fmtNum(a.clicks)+'</td><td>'+fmtNum(a.conversions)+'</td><td>'+fmtROAS(a.roas)+'</td><td>'+fmtPct(a.ctr)+'</td></tr>'
   ).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--muted)">No audience data available</td></tr>';
