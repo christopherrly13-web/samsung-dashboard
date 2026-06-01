@@ -621,11 +621,11 @@ app.get("/api/assets", async (req, res) => {
           category:    CATEGORY_MAP[fieldType] || CATEGORY_MAP[assetType] || fieldType || "Other",
           ad_strength: resolveEnum(grp.ad_strength ?? r.asset_group?.ad_strength, AD_STRENGTH_MAP),
           // Per-asset metrics
-          asset_spend,
-          asset_impressions,
-          asset_clicks,
-          asset_conversions,
-          asset_revenue,
+          asset_spend:       assetSpend,
+          asset_impressions: assetImpressions,
+          asset_clicks:      assetClicks,
+          asset_conversions: assetConversions,
+          asset_revenue:     assetRevenue,
           asset_ctr:  assetImpressions > 0 ? (assetClicks / assetImpressions) * 100 : 0,
           asset_roas: assetSpend > 0 ? assetRevenue / assetSpend : 0,
           // Group-level metrics
