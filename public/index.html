@@ -941,10 +941,10 @@ function renderCampaignKPIs(campaigns){
   if(!campaigns.length){document.getElementById('camKpis').innerHTML='';return}
   let c={spend:0,rev:0,conv:0,imp_share:0,budget_lost:0,rank_lost:0},p={spend:0,rev:0},isCount=0;
   campaigns.forEach(cam=>{
-    c.spend+=cam.cur.spend;c.rev+=cam.cur.revenue;c.conv+=cam.cur.conversions;
+    c.spend+=(cam.cur?.spend||0);c.rev+=(cam.cur?.revenue||0);c.conv+=(cam.cur?.conversions||0);
     if(cam.cur.imp_share>0){c.imp_share+=cam.cur.imp_share;isCount++}
     c.budget_lost+=cam.cur.budget_lost_is;c.rank_lost+=cam.cur.rank_lost_is;
-    p.spend+=cam.prev.spend;p.rev+=cam.prev.revenue;
+    p.spend+=(cam.prev?.spend||0);p.rev+=(cam.prev?.revenue||0);
   });
   const avgIS=isCount>0?c.imp_share/isCount:0;
   const avgBudget=campaigns.length>0?c.budget_lost/campaigns.length:0;
@@ -1090,11 +1090,12 @@ async function generateInsights() {
 }
 
 function renderInsightsKPIs(data) {
+  try {
   let spend=0,rev=0,clicks=0,imp=0,conv=0,pSpend=0,pRev=0,pClicks=0,pImp=0,pConv=0;
   Object.values(data.divisions).forEach(d => {
-    d.campaigns.forEach(c => { spend+=c.spend; rev+=c.revenue; clicks+=c.clicks; imp+=c.impressions; conv+=c.conversions; });
+    (d.campaigns||[]).filter(c=>c).forEach(c => { spend+=(c.spend||0); rev+=(c.revenue||0); clicks+=(c.clicks||0); imp+=(c.impressions||0); conv+=(c.conversions||0); });
   });
-  Object.values(data.prevTotals||{}).forEach(p => { pSpend+=p.spend; pRev+=p.revenue; pClicks+=p.clicks; pImp+=p.impressions; pConv+=p.conversions; });
+  Object.values(data.prevTotals||{}).filter(p=>p).forEach(p => { pSpend+=(p.spend||0); pRev+=(p.revenue||0); pClicks+=(p.clicks||0); pImp+=(p.impressions||0); pConv+=(p.conversions||0); });
   const roas=spend>0?rev/spend:0, proas=pSpend>0?pRev/pSpend:0;
   const ctr=imp>0?(clicks/imp)*100:0, pctr=pImp>0?(pClicks/pImp)*100:0;
   const cvr=clicks>0?(conv/clicks)*100:0, pcvr=pClicks>0?(pConv/pClicks)*100:0;
@@ -1125,13 +1126,13 @@ function renderInsightsTables(data) {
     allAudiences.push(...(d.audiences || []).filter(a => a && a.spend != null));
     d.devices.forEach(dev => {
       if (!allDevices[dev.device]) allDevices[dev.device]={device:dev.device,spend:0,impressions:0,clicks:0,conversions:0,revenue:0};
-      allDevices[dev.device].spend+=dev.spend; allDevices[dev.device].impressions+=dev.impressions;
+      allDevices[dev.device].spend+=(dev.spend||0); allDevices[dev.device].impressions+=(dev.impressions||0);
       allDevices[dev.device].clicks+=dev.clicks; allDevices[dev.device].conversions+=dev.conversions;
       allDevices[dev.device].revenue+=dev.revenue;
     });
     d.dayOfWeek.forEach(dow => {
       if (!allDow[dow.day]) allDow[dow.day]={day:dow.day,spend:0,conversions:0,revenue:0};
-      allDow[dow.day].spend+=dow.spend; allDow[dow.day].conversions+=dow.conversions; allDow[dow.day].revenue+=dow.revenue;
+      allDow[dow.day].spend+=(dow.spend||0); allDow[dow.day].conversions+=(dow.conversions||0); allDow[dow.day].revenue+=(dow.revenue||0);
     });
   });
 
@@ -1156,7 +1157,7 @@ function renderInsightsTables(data) {
     const key = k.keyword + '|' + k.match_type;
     if (!kwMap[key]) kwMap[key] = { keyword: k.keyword, match_type: k.match_type, spend:0, clicks:0, conversions:0, revenue:0, imp_share_sum:0, imp_share_count:0, cpc_sum:0, cpc_count:0 };
     const m = kwMap[key];
-    m.spend       += k.spend;
+    m.spend       += (k.spend||0);
     m.clicks      += k.clicks;
     m.conversions += k.conversions;
     m.revenue     += k.revenue;
@@ -1179,7 +1180,7 @@ function renderInsightsTables(data) {
   allSearchTerms.forEach(t => {
     if (!termMap[t.term]) termMap[t.term] = { term: t.term, spend:0, clicks:0, conversions:0, revenue:0, impressions:0 };
     const m = termMap[t.term];
-    m.spend       += t.spend;
+    m.spend       += (t.spend||0);
     m.clicks      += t.clicks;
     m.conversions += t.conversions;
     m.revenue     += t.revenue;
@@ -1207,6 +1208,7 @@ function renderInsightsTables(data) {
   document.getElementById('insAudienceTable').innerHTML = topAudiences.map(a =>
     '<tr><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">'+a.user_list+'</td><td>'+a.campaign+'</td><td>'+fmtUSD(a.spend)+'</td><td>'+fmtNum(a.clicks)+'</td><td>'+fmtNum(a.conversions)+'</td><td>'+fmtROAS(a.roas)+'</td><td>'+fmtPct(a.ctr)+'</td></tr>'
   ).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--muted)">No audience data available</td></tr>';
+  } catch(err) { console.error('renderInsightsTables error:', err); }
 }
 
 async function generateAIReport(data, startDate, endDate, prevStart, prevEnd) {
@@ -1225,48 +1227,48 @@ async function generateAIReport(data, startDate, endDate, prevStart, prevEnd) {
     const spendPop   = prev.spend>0?((totalSpend-prev.spend)/prev.spend*100).toFixed(1):null;
 
     const topCampaigns = [...d.campaigns].sort((a,b)=>b.spend-a.spend).slice(0,5).map(c =>
-      `${c.name} (${c.type}): $${c.spend.toFixed(0)} spend, ROAS ${c.roas.toFixed(2)}x, ${c.conversions.toFixed(0)} conv, IS ${c.imp_share.toFixed(1)}%, Budget Lost IS ${c.budget_lost_is.toFixed(1)}%, Rank Lost IS ${c.rank_lost_is.toFixed(1)}%`
+      `${c.name||''} (${c.type||''}): $${(c.spend||0).toFixed(0)} spend, ROAS ${(c.roas||0).toFixed(2)}x, ${(c.conversions||0).toFixed(0)} conv, IS ${(c.imp_share||0).toFixed(1)}%, Budget Lost IS ${(c.budget_lost_is||0).toFixed(1)}%, Rank Lost IS ${(c.rank_lost_is||0).toFixed(1)}%`
     ).join('\n');
 
     const kwMapAI = {};
     d.keywords.forEach(k => {
       const key = k.keyword+'|'+k.match_type;
       if (!kwMapAI[key]) kwMapAI[key]={keyword:k.keyword,match_type:k.match_type,spend:0,clicks:0,conversions:0,revenue:0,is_sum:0,is_n:0};
-      kwMapAI[key].spend+=k.spend; kwMapAI[key].clicks+=k.clicks; kwMapAI[key].conversions+=k.conversions; kwMapAI[key].revenue+=k.revenue;
+      kwMapAI[key].spend+=(k.spend||0); kwMapAI[key].clicks+=(k.clicks||0); kwMapAI[key].conversions+=(k.conversions||0); kwMapAI[key].revenue+=(k.revenue||0);
       if(k.imp_share>0){kwMapAI[key].is_sum+=k.imp_share;kwMapAI[key].is_n++;}
     });
     const topKeywords = Object.values(kwMapAI)
       .map(k=>({...k,roas:k.spend>0?k.revenue/k.spend:0,imp_share:k.is_n>0?k.is_sum/k.is_n:0}))
       .sort((a,b)=>b.spend-a.spend).slice(0,10)
-      .map(k=>`"${k.keyword}" [${k.match_type}]: $${k.spend.toFixed(0)}, ROAS ${k.roas.toFixed(2)}x, ${k.conversions.toFixed(0)} conv, IS ${k.imp_share.toFixed(1)}%`)
+      .map(k=>`"${k.keyword||''}" [${k.match_type||''}]: $${(k.spend||0).toFixed(0)}, ROAS ${(k.roas||0).toFixed(2)}x, ${(k.conversions||0).toFixed(0)} conv, IS ${(k.imp_share||0).toFixed(1)}%`)
       .join('\n');
 
     const termMapAI = {};
     d.searchTerms.forEach(t => {
       if(!termMapAI[t.term]) termMapAI[t.term]={term:t.term,spend:0,clicks:0,conversions:0,revenue:0,impressions:0};
-      termMapAI[t.term].spend+=t.spend; termMapAI[t.term].clicks+=t.clicks; termMapAI[t.term].conversions+=t.conversions;
+      termMapAI[t.term].spend+=(t.spend||0); termMapAI[t.term].clicks+=(t.clicks||0); termMapAI[t.term].conversions+=(t.conversions||0);
       termMapAI[t.term].revenue+=t.revenue; termMapAI[t.term].impressions+=t.impressions;
     });
     const topTerms = Object.values(termMapAI)
       .map(t=>({...t,ctr:t.impressions>0?(t.clicks/t.impressions)*100:0}))
       .sort((a,b)=>b.spend-a.spend).slice(0,10)
-      .map(t=>`"${t.term}": $${t.spend.toFixed(0)}, CTR ${t.ctr.toFixed(2)}%, ${t.conversions.toFixed(0)} conv, $${t.revenue.toFixed(0)} rev`)
+      .map(t=>`"${t.term||''}": $${(t.spend||0).toFixed(0)}, CTR ${(t.ctr||0).toFixed(2)}%, ${(t.conversions||0).toFixed(0)} conv, $${(t.revenue||0).toFixed(0)} rev`)
       .join('\n');
 
     const deviceSummary = d.devices.map(dev =>
-      `${dev.device}: $${dev.spend.toFixed(0)} (ROAS ${dev.roas.toFixed(2)}x, CTR ${dev.ctr.toFixed(2)}%, CVR ${dev.cvr.toFixed(2)}%)`
+      `${dev.device||''}: $${(dev.spend||0).toFixed(0)} (ROAS ${(dev.roas||0).toFixed(2)}x, CTR ${(dev.ctr||0).toFixed(2)}%, CVR ${(dev.cvr||0).toFixed(2)}%)`
     ).join(', ');
 
     const dowSummary = d.dayOfWeek.sort((a,b)=>b.roas-a.roas).map(dow =>
-      `${dow.day}: ROAS ${dow.roas.toFixed(2)}x, $${dow.spend.toFixed(0)} spend`
+      `${dow.day||''}: ROAS ${(dow.roas||0).toFixed(2)}x, $${(dow.spend||0).toFixed(0)} spend`
     ).join(', ');
 
     const assetSummary = d.assetGroups.slice(0,5).map(a =>
-      `${a.name} [${a.ad_strength}]: $${a.spend.toFixed(0)}, ROAS ${a.roas.toFixed(2)}x, ${a.conversions.toFixed(0)} conv`
+      `${a.name||''} [${a.ad_strength||''}]: $${(a.spend||0).toFixed(0)}, ROAS ${(a.roas||0).toFixed(2)}x, ${(a.conversions||0).toFixed(0)} conv`
     ).join('\n');
 
     const audienceSummary = d.audiences.slice(0,5).map(a =>
-      `${a.user_list}: $${a.spend.toFixed(0)}, ROAS ${a.roas.toFixed(2)}x, CTR ${a.ctr.toFixed(2)}%`
+      `${a.user_list||''}: $${(a.spend||0).toFixed(0)}, ROAS ${(a.roas||0).toFixed(2)}x, CTR ${(a.ctr||0).toFixed(2)}%`
     ).join('\n');
 
     return `
@@ -1614,7 +1616,7 @@ function renderSearchTermsPage() {
   const top10conv  = [...rows].sort((a,b)=>b.conversions-a.conversions).slice(0,10);
   destroyChart('stSpend');
   destroyChart('stConv');
-  charts.stSpend = new Chart(document.getElementById('stSpendChart'),{type:'bar',data:{labels:top10spend.map(r=>r.term.length>20?r.term.slice(0,18)+'…':r.term),datasets:[{data:top10spend.map(r=>+r.spend.toFixed(2)),backgroundColor:'#1428A099',borderColor:'#1428A0',borderWidth:1.5,borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{color:'#999',font:{size:10},callback:v=>'$'+v},grid:{color:'#f0f0f0'}},x:{ticks:{color:'#666',font:{size:10},maxRotation:35},grid:{display:false}}}}});
+  charts.stSpend = new Chart(document.getElementById('stSpendChart'),{type:'bar',data:{labels:top10spend.map(r=>r.term.length>20?r.term.slice(0,18)+'…':r.term),datasets:[{data:top10spend.map(r=>+(r.spend||0).toFixed(2)),backgroundColor:'#1428A099',borderColor:'#1428A0',borderWidth:1.5,borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{color:'#999',font:{size:10},callback:v=>'$'+v},grid:{color:'#f0f0f0'}},x:{ticks:{color:'#666',font:{size:10},maxRotation:35},grid:{display:false}}}}});
   charts.stConv  = new Chart(document.getElementById('stConvChart'), {type:'bar',data:{labels:top10conv.map(r=>r.term.length>20?r.term.slice(0,18)+'…':r.term),datasets:[{data:top10conv.map(r=>+r.conversions.toFixed(1)),backgroundColor:'#43A04799',borderColor:'#43A047',borderWidth:1.5,borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{color:'#999',font:{size:10}},grid:{color:'#f0f0f0'}},x:{ticks:{color:'#666',font:{size:10},maxRotation:35},grid:{display:false}}}}});
 
   // Table
