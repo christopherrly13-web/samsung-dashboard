@@ -219,7 +219,82 @@ async function summaryHandler(req, res) {
     const cur  = agg(curResults);
     const prev = agg(prevResults);
 
-    res.json({ current: cur, previous: prev, generatedAt: new Date().toISOString() });
+    // Build the flat `rows` array the frontend expects from /api/report
+    // Each row = one division's totals + per-type breakdown
+    const rows = [];
+    const allDivs = new Set([...Object.keys(cur), ...Object.keys(prev)]);
+    allDivs.forEach(divName => {
+      const c = cur[divName]  || { spend:0, impressions:0, clicks:0, conversions:0, revenue:0, byType:{} };
+      const p = prev[divName] || { spend:0, impressions:0, clicks:0, conversions:0, revenue:0, byType:{} };
+      // Total row for this division
+      rows.push({
+        div:         divName,
+        cam:         'total',
+        spend:       c.spend,
+        impressions: c.impressions,
+        clicks:      c.clicks,
+        conversions: c.conversions,
+        revenue:     c.revenue,
+        roas:        c.spend > 0 ? c.revenue / c.spend : 0,
+        ctr:         c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
+        cvr:         c.clicks > 0 ? (c.conversions / c.clicks) * 100 : 0,
+        imp_share:   0,
+        top_imp_share: 0,
+        prev: {
+          spend:       p.spend,
+          impressions: p.impressions,
+          clicks:      p.clicks,
+          conversions: p.conversions,
+          revenue:     p.revenue,
+          roas:        p.spend > 0 ? p.revenue / p.spend : 0,
+          ctr:         p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0,
+          cvr:         p.clicks > 0 ? (p.conversions / p.clicks) * 100 : 0,
+        },
+      });
+      // Per-type rows
+      const allTypes = new Set([...Object.keys(c.byType || {}), ...Object.keys(p.byType || {})]);
+      allTypes.forEach(type => {
+        const ct = (c.byType || {})[type] || { spend:0, impressions:0, clicks:0, conversions:0, revenue:0 };
+        const pt = (p.byType || {})[type] || { spend:0, impressions:0, clicks:0, conversions:0, revenue:0 };
+        rows.push({
+          div:         divName,
+          cam:         type,
+          spend:       ct.spend,
+          impressions: ct.impressions,
+          clicks:      ct.clicks,
+          conversions: ct.conversions,
+          revenue:     ct.revenue,
+          roas:        ct.spend > 0 ? ct.revenue / ct.spend : 0,
+          ctr:         ct.impressions > 0 ? (ct.clicks / ct.impressions) * 100 : 0,
+          cvr:         ct.clicks > 0 ? (ct.conversions / ct.clicks) * 100 : 0,
+          imp_share:   0,
+          top_imp_share: 0,
+          prev: {
+            spend:       pt.spend,
+            impressions: pt.impressions,
+            clicks:      pt.clicks,
+            conversions: pt.conversions,
+            revenue:     pt.revenue,
+            roas:        pt.spend > 0 ? pt.revenue / pt.spend : 0,
+            ctr:         pt.impressions > 0 ? (pt.clicks / pt.impressions) * 100 : 0,
+            cvr:         pt.clicks > 0 ? (pt.conversions / pt.clicks) * 100 : 0,
+          },
+        });
+      });
+    });
+
+    res.json({
+      // Shape expected by frontend /api/report consumers
+      rows,
+      periods: {
+        current:  { startDate, endDate },
+        previous: { startDate: prevStartDate, endDate: prevEndDate },
+      },
+      // Also include raw aggregates for anything that uses /api/summary shape
+      current:  cur,
+      previous: prev,
+      generatedAt: new Date().toISOString(),
+    });
   } catch(err) {
     console.error("Summary error:", err.message);
     res.status(500).json({ error: err.message });
